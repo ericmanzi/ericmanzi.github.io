@@ -1,0 +1,41 @@
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: #171E26;
+  background-image: url("../img/graph-wash.png");
+  color: white;
+  font-family: 'Rubik', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.container {
+  max-width: 600px;
+}
+
+.name-header {
+  max-width: 720px;
+  padding-top: 4rem!important;
+}
+
+.fa {
+  font-size: 70px;
+  color: white;
+  opacity: 0.6;
+}
+
+.fa:hover {
+  opacity: 1;
+}
+
+.display-4 {
+  font-size: 2.1rem;
+}
