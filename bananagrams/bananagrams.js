@@ -10,6 +10,8 @@ const GRID_SIZE = 25;
 const STARTING_TILES = 21;
 const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt';
 const STORAGE_KEY = 'bananagrams_game_state';
+const TRIGGER_WORDS = ['EL', 'EM', 'EN', 'EX', 'RE', 'MI', 'FA', 'LA', 'TI'];
+const PASTEBIN_API_KEY = 'RPhCpcJRds2FA9J43iMJfOC-FiOSWys-';
 
 function saveGameState(state) {
   try {
@@ -71,6 +73,8 @@ function Bananagrams() {
   const [selectedSource, setSelectedSource] = useState(null);
   const [dictionary, setDictionary] = useState(null);
   const [dictionaryLoading, setDictionaryLoading] = useState(true);
+  const [showEasterEgg, setShowEasterEgg] = useState(false);
+  const [easterEggResponse, setEasterEggResponse] = useState(null);
   const timerRef = useRef(null);
   const gridRef = useRef(null);
 
@@ -311,6 +315,16 @@ function Bananagrams() {
   const gridWords = getWordsOnGrid();
   const validWords = dictionary ? gridWords.filter(w => dictionary.has(w.word)) : [];
 
+  // Check for Easter egg trigger words
+  useEffect(() => {
+    if (gameState === 'playing' && !showEasterEgg && easterEggResponse === null) {
+      const hasTriggerWord = gridWords.some(w => TRIGGER_WORDS.includes(w.word));
+      if (hasTriggerWord) {
+        setShowEasterEgg(true);
+      }
+    }
+  }, [gridWords, gameState, showEasterEgg, easterEggResponse]);
+
   const baseFont = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
   const tileStyle = (isSelected) => ({
@@ -501,8 +515,163 @@ function Bananagrams() {
       padding: '10px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '8px'
+      gap: '8px',
+      position: 'relative'
     }}>
+      {/* Easter Egg Overlay */}
+      {showEasterEgg && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          animation: 'fadeIn 0.5s ease'
+        }}>
+          <style>
+            {`
+              @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+              @keyframes float {
+                0%, 100% { transform: translateY(0px); }
+                50% { transform: translateY(-20px); }
+              }
+              @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+              }
+              @keyframes pulse {
+                0%, 100% { transform: scale(1); }
+                50% { transform: scale(1.05); }
+              }
+              .flower {
+                position: absolute;
+                font-size: 3rem;
+                animation: float 3s ease-in-out infinite;
+                opacity: 0.8;
+              }
+            `}
+          </style>
+
+          {/* Floating flowers */}
+          <div className="flower" style={{ top: '10%', left: '10%', animationDelay: '0s' }}>🌸</div>
+          <div className="flower" style={{ top: '15%', right: '15%', animationDelay: '0.5s' }}>🌺</div>
+          <div className="flower" style={{ bottom: '20%', left: '8%', animationDelay: '1s' }}>🌼</div>
+          <div className="flower" style={{ bottom: '15%', right: '10%', animationDelay: '1.5s' }}>🌷</div>
+          <div className="flower" style={{ top: '40%', left: '5%', animationDelay: '2s' }}>🌹</div>
+          <div className="flower" style={{ top: '35%', right: '8%', animationDelay: '2.5s' }}>💐</div>
+          <div className="flower" style={{ bottom: '40%', left: '12%', animationDelay: '0.8s' }}>🏵️</div>
+          <div className="flower" style={{ bottom: '45%', right: '15%', animationDelay: '1.8s' }}>🌻</div>
+
+          <div style={{
+            background: 'linear-gradient(145deg, #FFE5E5, #FFD5D5)',
+            borderRadius: '30px',
+            padding: '50px 60px',
+            boxShadow: '0 30px 80px rgba(255, 105, 180, 0.5)',
+            textAlign: 'center',
+            maxWidth: '500px',
+            border: '3px solid rgba(255, 182, 193, 0.8)',
+            animation: 'pulse 2s ease-in-out infinite',
+            position: 'relative',
+            zIndex: 10000
+          }}>
+            <div style={{ fontSize: '4rem', marginBottom: '20px' }}>💖</div>
+            <h1 style={{
+              fontSize: '2rem',
+              color: '#C41E3A',
+              margin: '0 0 30px 0',
+              fontWeight: '800',
+              textShadow: '2px 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              Hi Rebekah!
+            </h1>
+            <p style={{
+              fontSize: '1.5rem',
+              color: '#D63384',
+              margin: '0 0 40px 0',
+              fontWeight: '600'
+            }}>
+              Will you go on a <a href='https://icecastles.com/new-hampshire/'>weekend getaway</a> with me?
+            </p>
+
+            {easterEggResponse === null ? (
+              <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+                <button onClick={() => setEasterEggResponse('yes')} style={{
+                  background: 'linear-gradient(145deg, #FF69B4, #FF1493)',
+                  border: 'none',
+                  borderRadius: '15px',
+                  padding: '18px 50px',
+                  fontSize: '1.4rem',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontFamily: baseFont,
+                  fontWeight: '700',
+                  boxShadow: '0 6px 0 #C71585',
+                  touchAction: 'manipulation',
+                  transition: 'transform 0.1s'
+                }}>
+                  Yes! 💕
+                </button>
+                <button onClick={() => setEasterEggResponse('no')} style={{
+                  background: 'linear-gradient(145deg, #999, #777)',
+                  border: 'none',
+                  borderRadius: '15px',
+                  padding: '18px 50px',
+                  fontSize: '1.4rem',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontFamily: baseFont,
+                  fontWeight: '700',
+                  boxShadow: '0 6px 0 #555',
+                  touchAction: 'manipulation',
+                  transition: 'transform 0.1s'
+                }}>
+                  No
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: '3rem', margin: '20px 0' }}>
+                  {easterEggResponse === 'yes' ? '🎉💖✨' : '💔'}
+                </div>
+                <p style={{
+                  fontSize: '1.2rem',
+                  color: '#D63384',
+                  margin: '20px 0',
+                  fontWeight: '600'
+                }}>
+                  {easterEggResponse === 'yes'
+                    ? 'Yay! You made my day! 💕'
+                    : 'Oh... okay 😢'}
+                </p>
+                <button onClick={() => setShowEasterEgg(false)} style={{
+                  background: 'linear-gradient(145deg, #4CAF50, #45a049)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '14px 40px',
+                  fontSize: '1.1rem',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontFamily: baseFont,
+                  fontWeight: '700',
+                  boxShadow: '0 5px 0 #2E7D32',
+                  touchAction: 'manipulation'
+                }}>
+                  Continue Playing
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '6px' }}>
         <button onClick={handlePeel} style={{
@@ -572,21 +741,6 @@ function Bananagrams() {
         </div>
       )}
 
-      {/* Selected tile indicator */}
-      {selectedTile && (
-        <div style={{
-          background: 'rgba(76, 175, 80, 0.3)',
-          padding: '8px 16px',
-          borderRadius: '10px',
-          textAlign: 'center',
-          color: '#4CAF50',
-          fontWeight: '600',
-          fontSize: '0.9rem'
-        }}>
-          Selected: {selectedTile.letter} — Tap grid to place or tap hand area to return
-        </div>
-      )}
-
       {/* Words panel */}
       {showWords && gridWords.length > 0 && (
         <div style={{
@@ -618,6 +772,53 @@ function Bananagrams() {
           })}
         </div>
       )}
+
+      {/* Hand */}
+      <div
+        onClick={handleHandAreaTap}
+        style={{
+          background: selectedTile && selectedSource?.type === 'grid'
+            ? 'rgba(76, 175, 80, 0.15)'
+            : 'rgba(255,255,255,0.08)',
+          borderRadius: '12px',
+          padding: '12px',
+          minHeight: '80px',
+          border: selectedTile && selectedSource?.type === 'grid'
+            ? '2px dashed rgba(76, 175, 80, 0.5)'
+            : '2px solid transparent'
+        }}
+      >
+        <div style={{
+          color: 'rgba(255,255,255,0.4)',
+          marginBottom: '8px',
+          fontSize: '0.75rem',
+          fontWeight: '500',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
+        }}>
+          Your Hand — Tap to select
+        </div>
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '6px'
+        }}
+        onClick={(e) => e.stopPropagation()}
+        >
+          {hand.map((tile) => {
+            const isSelected = selectedTile?.id === tile.id && selectedSource?.type === 'hand';
+            return (
+              <div
+                key={tile.id}
+                onClick={() => handleTileSelect(tile, 'hand')}
+                style={tileStyle(isSelected)}
+              >
+                {tile.letter}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Grid */}
       <div
@@ -674,52 +875,21 @@ function Bananagrams() {
         </div>
       </div>
 
-      {/* Hand */}
-      <div
-        onClick={handleHandAreaTap}
-        style={{
-          background: selectedTile && selectedSource?.type === 'grid'
-            ? 'rgba(76, 175, 80, 0.15)'
-            : 'rgba(255,255,255,0.08)',
-          borderRadius: '12px',
-          padding: '12px',
-          minHeight: '80px',
-          border: selectedTile && selectedSource?.type === 'grid'
-            ? '2px dashed rgba(76, 175, 80, 0.5)'
-            : '2px solid transparent'
-        }}
-      >
+      {/* Selected tile indicator */}
+      {selectedTile && (
         <div style={{
-          color: 'rgba(255,255,255,0.4)',
-          marginBottom: '8px',
-          fontSize: '0.75rem',
-          fontWeight: '500',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px'
+          background: 'rgba(76, 175, 80, 0.3)',
+          padding: '8px 16px',
+          borderRadius: '10px',
+          textAlign: 'center',
+          color: '#4CAF50',
+          fontWeight: '600',
+          fontSize: '0.9rem'
         }}>
-          Your Hand — Tap to select
+          Selected: {selectedTile.letter} — Tap grid to place or tap hand area to return
         </div>
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '6px'
-        }}
-        onClick={(e) => e.stopPropagation()}
-        >
-          {hand.map((tile) => {
-            const isSelected = selectedTile?.id === tile.id && selectedSource?.type === 'hand';
-            return (
-              <div
-                key={tile.id}
-                onClick={() => handleTileSelect(tile, 'hand')}
-                style={tileStyle(isSelected)}
-              >
-                {tile.letter}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      )}
+
       {/* Timer */}
       <div style={{
         display: 'flex',
@@ -735,7 +905,7 @@ function Bananagrams() {
           fontSize: '1.3rem',
           border: 'none',
           touchAction: 'manipulation',
-          background: rgb(255, 225, 53)
+          background: 'rgba(255, 225, 53, 0.15)'
         }}>🍌</button>
 
         <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4037' }}>
