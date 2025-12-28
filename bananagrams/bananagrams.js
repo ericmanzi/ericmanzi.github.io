@@ -6,9 +6,36 @@ const LETTER_DISTRIBUTION = {
   M: 3, N: 8, O: 11, P: 3, Q: 2, R: 9, S: 6, T: 9, U: 6, V: 3, W: 3, X: 2, Y: 3, Z: 2
 };
 
-const GRID_SIZE = 15;
+const GRID_SIZE = 25;
 const STARTING_TILES = 21;
 const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt';
+const STORAGE_KEY = 'bananagrams_game_state';
+
+function saveGameState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error('Failed to save game state:', error);
+  }
+}
+
+function loadGameState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch (error) {
+    console.error('Failed to load game state:', error);
+    return null;
+  }
+}
+
+function clearGameState() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (error) {
+    console.error('Failed to clear game state:', error);
+  }
+}
 
 function createTileBag() {
   const tiles = [];
@@ -48,6 +75,9 @@ function Bananagrams() {
   const gridRef = useRef(null);
 
   const startGame = () => {
+    // Clear any saved game state when starting fresh
+    clearGameState();
+
     const newBag = createTileBag();
     const startingHand = newBag.slice(0, STARTING_TILES);
     const remainingBunch = newBag.slice(STARTING_TILES);
@@ -67,6 +97,9 @@ function Bananagrams() {
   };
 
   const resetGame = () => {
+    // Clear saved game state when quitting
+    clearGameState();
+
     if (timerRef.current) clearInterval(timerRef.current);
     setGameState('menu');
     setTimer(0);
@@ -78,6 +111,23 @@ function Bananagrams() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, []);
+
+  // Restore saved game state on mount
+  useEffect(() => {
+    const saved = loadGameState();
+    if (saved && saved.gameState === 'playing') {
+      setBunch(saved.bunch || []);
+      setHand(saved.hand || []);
+      setGrid(saved.grid || Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null)));
+      setGameState(saved.gameState);
+      setTimer(saved.timer || 0);
+
+      // Restart timer if game was in progress
+      timerRef.current = setInterval(() => {
+        setTimer(t => t + 1);
+      }, 1000);
+    }
   }, []);
 
   // Load dictionary on mount
@@ -94,6 +144,19 @@ function Bananagrams() {
         setDictionaryLoading(false);
       });
   }, []);
+
+  // Save game state whenever it changes
+  useEffect(() => {
+    if (gameState === 'playing') {
+      saveGameState({
+        bunch,
+        hand,
+        grid,
+        gameState,
+        timer
+      });
+    }
+  }, [bunch, hand, grid, gameState, timer]);
 
   // Tap to select, tap to place
   const handleTileSelect = (tile, source, sourcePos = null) => {
@@ -157,6 +220,8 @@ function Bananagrams() {
     }
 
     if (bunch.length === 0) {
+      // Clear saved game state when winning
+      clearGameState();
       if (timerRef.current) clearInterval(timerRef.current);
       setGameState('won');
       return;
@@ -327,7 +392,7 @@ function Bananagrams() {
             margin: '0 0 30px 0',
             fontWeight: '500'
           }}>
-            Single Player Word Game
+            Single Player
           </p>
 
           <button onClick={startGame} disabled={dictionaryLoading} style={{
@@ -438,7 +503,6 @@ function Bananagrams() {
       flexDirection: 'column',
       gap: '8px'
     }}>
-      {/* Header */}
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '6px' }}>
         <button onClick={handlePeel} style={{
@@ -669,8 +733,11 @@ function Bananagrams() {
         <button onClick={tips} style={{
           cursor: 'pointer',
           fontSize: '1.3rem',
-          touchAction: 'manipulation'
+          border: 'none',
+          touchAction: 'manipulation',
+          background-color: rgb(255, 225, 53)
         }}>🍌</button>
+
         <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4037' }}>
           {formatTime(timer)}
         </span>
