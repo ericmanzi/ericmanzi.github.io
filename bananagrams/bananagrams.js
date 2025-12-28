@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+const { useState, useEffect, useRef, useCallback } = React;
 
 // Letter distribution based on real Bananagrams
 const LETTER_DISTRIBUTION = {
@@ -8,86 +8,7 @@ const LETTER_DISTRIBUTION = {
 
 const GRID_SIZE = 15;
 const STARTING_TILES = 21;
-
-const COMMON_WORDS = new Set([
-  'THE', 'AND', 'FOR', 'ARE', 'BUT', 'NOT', 'YOU', 'ALL', 'CAN', 'HAD', 'HER', 'WAS', 'ONE', 'OUR', 'OUT',
-  'DAY', 'GET', 'HAS', 'HIM', 'HIS', 'HOW', 'ITS', 'LET', 'MAY', 'NEW', 'NOW', 'OLD', 'SEE', 'WAY', 'WHO',
-  'BOY', 'DID', 'OWN', 'SAY', 'SHE', 'TOO', 'USE', 'CAT', 'DOG', 'RUN', 'SUN', 'FUN', 'BIG', 'RED', 'BAD',
-  'GOOD', 'VERY', 'JUST', 'KNOW', 'TAKE', 'COME', 'MAKE', 'LIKE', 'TIME', 'BACK', 'ONLY', 'LOOK', 'ALSO',
-  'WORD', 'GAME', 'PLAY', 'TILE', 'GRID', 'MOVE', 'SWAP', 'PEEL', 'HAND', 'DRAW', 'PICK', 'DROP', 'SPOT',
-  'BANANA', 'GRAMS', 'LETTER', 'SPELL', 'CHECK', 'VALID', 'SCORE', 'POINT', 'BOARD', 'PLACE', 'WORDS',
-  'AT', 'BE', 'DO', 'GO', 'HE', 'IF', 'IN', 'IS', 'IT', 'ME', 'MY', 'NO', 'OF', 'ON', 'OR', 'SO', 'TO', 'UP', 'WE',
-  'AN', 'AS', 'BY', 'EX', 'HI', 'LO', 'OH', 'OK', 'OX', 'PI', 'RE', 'US', 'WO', 'YA', 'YE', 'ZA',
-  'ACE', 'ADD', 'AGE', 'AGO', 'AID', 'AIM', 'AIR', 'ALL', 'AND', 'ANT', 'ANY', 'APE', 'ARC', 'ARE', 'ARK',
-  'ARM', 'ART', 'ASH', 'ASK', 'ATE', 'AWE', 'AXE', 'BAD', 'BAG', 'BAN', 'BAR', 'BAT', 'BAY', 'BED', 'BEE',
-  'BET', 'BIG', 'BIT', 'BOW', 'BOX', 'BUD', 'BUG', 'BUN', 'BUS', 'BUT', 'BUY', 'CAB', 'CAN', 'CAP', 'CAR',
-  'COW', 'CRY', 'CUB', 'CUP', 'CUT', 'DAD', 'DAM', 'DEN', 'DEW', 'DID', 'DIG', 'DIM', 'DIP', 'DOC', 'DOE',
-  'EAR', 'EAT', 'EEL', 'EGG', 'ELF', 'ELK', 'ELM', 'EMU', 'END', 'ERA', 'EVE', 'EWE', 'EYE', 'FAD', 'FAN',
-  'FAR', 'FAT', 'FAX', 'FED', 'FEE', 'FEW', 'FIG', 'FIN', 'FIT', 'FIX', 'FLY', 'FOB', 'FOE', 'FOG', 'FOR',
-  'FOX', 'FRY', 'FUN', 'FUR', 'GAB', 'GAG', 'GAP', 'GAS', 'GAY', 'GEL', 'GEM', 'GET', 'GIG', 'GIN', 'GNU',
-  'GOB', 'GOD', 'GOT', 'GUM', 'GUN', 'GUT', 'GUY', 'GYM', 'HAD', 'HAM', 'HAS', 'HAT', 'HAY', 'HEM', 'HEN',
-  'HID', 'HIM', 'HIP', 'HIS', 'HIT', 'HOB', 'HOG', 'HOP', 'HOT', 'HOW', 'HUB', 'HUE', 'HUG', 'HUM', 'HUT',
-  'ICE', 'ICY', 'ILL', 'IMP', 'INK', 'INN', 'ION', 'IRE', 'IRK', 'ITS', 'IVY', 'JAB', 'JAM', 'JAR', 'JAW',
-  'JAY', 'JET', 'JIG', 'JOB', 'JOG', 'JOT', 'JOY', 'JUG', 'JUT', 'KEG', 'KEN', 'KEY', 'KID', 'KIN', 'KIT',
-  'LAB', 'LAD', 'LAG', 'LAP', 'LAW', 'LAY', 'LEA', 'LED', 'LEG', 'LET', 'LID', 'LIE', 'LIP', 'LIT', 'LOG',
-  'LOT', 'LOW', 'LUG', 'MAD', 'MAN', 'MAP', 'MAT', 'MAW', 'MAY', 'MEN', 'MET', 'MID', 'MIX', 'MOB', 'MOM',
-  'MOP', 'MOW', 'MUD', 'MUG', 'MUM', 'NAB', 'NAG', 'NAP', 'NAY', 'NET', 'NEW', 'NIL', 'NIT', 'NOB', 'NOD',
-  'NOR', 'NOT', 'NOW', 'NUB', 'NUN', 'NUT', 'OAK', 'OAR', 'OAT', 'ODD', 'ODE', 'OFF', 'OFT', 'OHM', 'OIL',
-  'OLD', 'ONE', 'OPT', 'ORB', 'ORE', 'OUR', 'OUT', 'OWE', 'OWL', 'OWN', 'PAD', 'PAL', 'PAN', 'PAP', 'PAR',
-  'PAT', 'PAW', 'PAY', 'PEA', 'PEG', 'PEN', 'PEP', 'PER', 'PET', 'PEW', 'PIE', 'PIG', 'PIN', 'PIT', 'PLY',
-  'POD', 'POP', 'POT', 'POW', 'PRY', 'PUB', 'PUN', 'PUP', 'PUS', 'PUT', 'RAG', 'RAM', 'RAN', 'RAP', 'RAT',
-  'RAW', 'RAY', 'RED', 'REF', 'REP', 'RIB', 'RID', 'RIG', 'RIM', 'RIP', 'ROB', 'ROD', 'ROE', 'ROT', 'ROW',
-  'RUB', 'RUG', 'RUM', 'RUN', 'RUT', 'RYE', 'SAC', 'SAD', 'SAG', 'SAP', 'SAT', 'SAW', 'SAY', 'SEA', 'SET',
-  'SEW', 'SHE', 'SHY', 'SIN', 'SIP', 'SIR', 'SIS', 'SIT', 'SIX', 'SKI', 'SKY', 'SLY', 'SOB', 'SOD', 'SON',
-  'SOP', 'SOT', 'SOW', 'SOY', 'SPA', 'SPY', 'STY', 'SUB', 'SUM', 'SUN', 'SUP', 'TAB', 'TAD', 'TAG', 'TAN',
-  'TAP', 'TAR', 'TAT', 'TAX', 'TEA', 'TEN', 'THE', 'THY', 'TIC', 'TIE', 'TIN', 'TIP', 'TOE', 'TON', 'TOO',
-  'TOP', 'TOT', 'TOW', 'TOY', 'TRY', 'TUB', 'TUG', 'TWO', 'URN', 'USE', 'VAN', 'VAT', 'VET', 'VIA', 'VIE',
-  'VOW', 'WAD', 'WAG', 'WAR', 'WAS', 'WAX', 'WAY', 'WEB', 'WED', 'WEE', 'WET', 'WHO', 'WHY', 'WIG', 'WIN',
-  'WIT', 'WOE', 'WOK', 'WON', 'WOO', 'WOW', 'YAK', 'YAM', 'YAP', 'YAW', 'YEA', 'YES', 'YET', 'YEW', 'YIN',
-  'YIP', 'YOU', 'ZAP', 'ZED', 'ZEN', 'ZIP', 'ZIT', 'ZOO',
-  'ABLE', 'ACHE', 'AGED', 'ALSO', 'AREA', 'ARMY', 'AWAY', 'BABY', 'BACK', 'BALL', 'BAND', 'BANK', 'BASE',
-  'BATH', 'BEAR', 'BEAT', 'BEEN', 'BEER', 'BELL', 'BELT', 'BEND', 'BENT', 'BEST', 'BILL', 'BIRD', 'BITE',
-  'BLOW', 'BLUE', 'BOAT', 'BODY', 'BOIL', 'BOLD', 'BOMB', 'BOND', 'BONE', 'BOOK', 'BOOM', 'BORN', 'BOSS',
-  'BOTH', 'BOWL', 'BURN', 'BUSH', 'BUSY', 'CAGE', 'CAKE', 'CALL', 'CALM', 'CAME', 'CAMP', 'CARD', 'CARE',
-  'CASE', 'CASH', 'CAST', 'CELL', 'CHAT', 'CHIP', 'CITY', 'CLUB', 'COAL', 'COAT', 'CODE', 'COIN', 'COLD',
-  'COOK', 'COOL', 'COPE', 'COPY', 'CORE', 'COST', 'CREW', 'CROP', 'DARK', 'DATA', 'DATE', 'DAWN', 'DAYS',
-  'DEAD', 'DEAL', 'DEAN', 'DEAR', 'DEBT', 'DEEP', 'DENY', 'DESK', 'DIAL', 'DIET', 'DIRT', 'DISC', 'DISH',
-  'DISK', 'DOES', 'DONE', 'DOOR', 'DOSE', 'DOWN', 'DRAG', 'DRAW', 'DREW', 'DROP', 'DRUG', 'DUAL', 'DUKE',
-  'DUST', 'DUTY', 'EACH', 'EARN', 'EASE', 'EAST', 'EASY', 'EDGE', 'ELSE', 'EVEN', 'EVER', 'EVIL', 'EXAM',
-  'EXEC', 'EXIT', 'FACE', 'FACT', 'FAIL', 'FAIR', 'FALL', 'FAME', 'FARM', 'FAST', 'FATE', 'FEAR', 'FEED',
-  'FEEL', 'FEET', 'FELL', 'FELT', 'FILE', 'FILL', 'FILM', 'FIND', 'FINE', 'FIRE', 'FIRM', 'FISH', 'FIVE',
-  'FLAT', 'FLEW', 'FLOW', 'FOLK', 'FOOD', 'FOOT', 'FORD', 'FORM', 'FORT', 'FOUR', 'FREE', 'FROM', 'FUEL',
-  'FULL', 'FUND', 'GAIN', 'GAME', 'GANG', 'GATE', 'GAVE', 'GEAR', 'GENE', 'GIFT', 'GIRL', 'GIVE', 'GLAD',
-  'GOAL', 'GOES', 'GOLD', 'GOLF', 'GONE', 'GOOD', 'GRAB', 'GRAY', 'GREW', 'GREY', 'GROW', 'GULF', 'HAIR',
-  'HALF', 'HALL', 'HAND', 'HANG', 'HARD', 'HARM', 'HATE', 'HAVE', 'HEAD', 'HEAR', 'HEAT', 'HEAVY', 'HELD',
-  'HELL', 'HELP', 'HERE', 'HERO', 'HIGH', 'HILL', 'HIRE', 'HOLD', 'HOLE', 'HOLY', 'HOME', 'HOPE', 'HOST',
-  'HOUR', 'HUGE', 'HUNG', 'HUNT', 'HURT', 'IDEA', 'INCH', 'INTO', 'IRON', 'ITEM', 'JACK', 'JANE', 'JEAN',
-  'JOHN', 'JOIN', 'JOKE', 'JUMP', 'JUNE', 'JURY', 'JUST', 'KEEN', 'KEEP', 'KENT', 'KEPT', 'KICK', 'KILL',
-  'KIND', 'KING', 'KNEE', 'KNEW', 'KNOW', 'LACK', 'LADY', 'LAID', 'LAKE', 'LAMP', 'LAND', 'LANE', 'LAST',
-  'LATE', 'LEAD', 'LEFT', 'LEND', 'LESS', 'LIFE', 'LIFT', 'LIKE', 'LINE', 'LINK', 'LIST', 'LIVE', 'LOAD',
-  'LOAN', 'LOCK', 'LOGO', 'LONG', 'LOOK', 'LORD', 'LOSE', 'LOSS', 'LOST', 'LOTS', 'LOVE', 'LUCK', 'MADE',
-  'MAIL', 'MAIN', 'MAKE', 'MALE', 'MANY', 'MARK', 'MASS', 'MATE', 'MEAL', 'MEAN', 'MEAT', 'MEET', 'MENU',
-  'MERE', 'MIKE', 'MILD', 'MILE', 'MILK', 'MILL', 'MIND', 'MINE', 'MISS', 'MODE', 'MOOD', 'MOON', 'MORE',
-  'MOST', 'MOVE', 'MUCH', 'MUST', 'NAME', 'NEAR', 'NEAT', 'NECK', 'NEED', 'NEWS', 'NEXT', 'NICE', 'NINE',
-  'NODE', 'NONE', 'NOON', 'NORM', 'NOSE', 'NOTE', 'NOUN', 'OKAY', 'ONCE', 'ONLY', 'ONTO', 'OPEN', 'ORAL',
-  'OVER', 'PACE', 'PACK', 'PAGE', 'PAID', 'PAIN', 'PAIR', 'PALE', 'PALM', 'PARK', 'PART', 'PASS', 'PAST',
-  'PATH', 'PEAK', 'PICK', 'PINK', 'PIPE', 'PLAN', 'PLAY', 'PLOT', 'PLUG', 'PLUS', 'POEM', 'POET', 'POLL',
-  'POOL', 'POOR', 'PORT', 'POST', 'POUR', 'PRAY', 'PULL', 'PURE', 'PUSH', 'QUIT', 'RACE', 'RAIL', 'RAIN',
-  'RANK', 'RARE', 'RATE', 'READ', 'REAL', 'REAR', 'RELY', 'RENT', 'REST', 'RICE', 'RICH', 'RIDE', 'RING',
-  'RISE', 'RISK', 'ROAD', 'ROCK', 'ROLE', 'ROLL', 'ROOF', 'ROOM', 'ROOT', 'ROSE', 'RULE', 'RUSH', 'SAFE',
-  'SAID', 'SAKE', 'SALE', 'SALT', 'SAME', 'SAND', 'SAVE', 'SEAT', 'SEEK', 'SEEM', 'SEEN', 'SELF', 'SELL',
-  'SEND', 'SENT', 'SEPT', 'SHIP', 'SHOP', 'SHOT', 'SHOW', 'SHUT', 'SICK', 'SIDE', 'SIGN', 'SITE', 'SIZE',
-  'SKIN', 'SLIP', 'SLOW', 'SNOW', 'SOFT', 'SOIL', 'SOLD', 'SOLE', 'SOME', 'SONG', 'SOON', 'SORT', 'SOUL',
-  'SPOT', 'STAR', 'STAY', 'STEM', 'STEP', 'STOP', 'SUCH', 'SUIT', 'SURE', 'SWIM', 'TAKE', 'TALE', 'TALK',
-  'TALL', 'TANK', 'TAPE', 'TASK', 'TEAM', 'TEAR', 'TECH', 'TELL', 'TEND', 'TENT', 'TERM', 'TEST', 'TEXT',
-  'THAN', 'THAT', 'THEM', 'THEN', 'THEY', 'THIN', 'THIS', 'THUS', 'TIDE', 'TIED', 'TILL', 'TIME', 'TINY',
-  'TIRE', 'TOLD', 'TONE', 'TOOK', 'TOOL', 'TOUR', 'TOWN', 'TREE', 'TRIP', 'TRUE', 'TUBE', 'TURN', 'TWIN',
-  'TYPE', 'UNIT', 'UPON', 'USED', 'USER', 'VARY', 'VAST', 'VERY', 'VIEW', 'VOTE', 'WAGE', 'WAIT', 'WAKE',
-  'WALK', 'WALL', 'WANT', 'WARM', 'WARN', 'WASH', 'WAVE', 'WAYS', 'WEAK', 'WEAR', 'WEEK', 'WELL', 'WENT',
-  'WERE', 'WEST', 'WHAT', 'WHEN', 'WHOM', 'WIDE', 'WIFE', 'WILD', 'WILL', 'WIND', 'WINE', 'WING', 'WIRE',
-  'WISE', 'WISH', 'WITH', 'WOKE', 'WOLF', 'WOOD', 'WOOL', 'WORE', 'WORK', 'WORN', 'WRAP', 'YARD', 'YEAH',
-  'YEAR', 'YOUR', 'ZERO', 'ZONE'
-]);
+const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt';
 
 function createTileBag() {
   const tiles = [];
@@ -109,10 +30,10 @@ function shuffle(array) {
   return arr;
 }
 
-export default function Bananagrams() {
+function Bananagrams() {
   const [bunch, setBunch] = useState([]);
   const [hand, setHand] = useState([]);
-  const [grid, setGrid] = useState(() => 
+  const [grid, setGrid] = useState(() =>
     Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null))
   );
   const [gameState, setGameState] = useState('menu');
@@ -121,6 +42,8 @@ export default function Bananagrams() {
   const [showWords, setShowWords] = useState(false);
   const [selectedTile, setSelectedTile] = useState(null);
   const [selectedSource, setSelectedSource] = useState(null);
+  const [dictionary, setDictionary] = useState(null);
+  const [dictionaryLoading, setDictionaryLoading] = useState(true);
   const timerRef = useRef(null);
   const gridRef = useRef(null);
 
@@ -128,7 +51,7 @@ export default function Bananagrams() {
     const newBag = createTileBag();
     const startingHand = newBag.slice(0, STARTING_TILES);
     const remainingBunch = newBag.slice(STARTING_TILES);
-    
+
     setHand(startingHand);
     setBunch(remainingBunch);
     setGrid(Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null)));
@@ -137,7 +60,7 @@ export default function Bananagrams() {
     setMessage('');
     setSelectedTile(null);
     setSelectedSource(null);
-    
+
     timerRef.current = setInterval(() => {
       setTimer(t => t + 1);
     }, 1000);
@@ -155,6 +78,21 @@ export default function Bananagrams() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, []);
+
+  // Load dictionary on mount
+  useEffect(() => {
+    fetch(DICTIONARY_URL)
+      .then(response => response.text())
+      .then(text => {
+        const words = text.split('\n').map(word => word.trim().toUpperCase()).filter(word => word.length > 0);
+        setDictionary(new Set(words));
+        setDictionaryLoading(false);
+      })
+      .catch(error => {
+        console.error('Failed to load dictionary:', error);
+        setDictionaryLoading(false);
+      });
   }, []);
 
   // Tap to select, tap to place
@@ -217,7 +155,7 @@ export default function Bananagrams() {
       setTimeout(() => setMessage(''), 2000);
       return;
     }
-    
+
     if (bunch.length === 0) {
       if (timerRef.current) clearInterval(timerRef.current);
       setGameState('won');
@@ -237,7 +175,7 @@ export default function Bananagrams() {
       setTimeout(() => setMessage(''), 2000);
       return;
     }
-    
+
     if (bunch.length < 3) {
       setMessage('Not enough tiles in bunch to dump!');
       setTimeout(() => setMessage(''), 2000);
@@ -247,7 +185,7 @@ export default function Bananagrams() {
     const tileToReturn = hand[hand.length - 1];
     const newTiles = bunch.slice(0, 3);
     const newBunch = shuffle([...bunch.slice(3), tileToReturn]);
-    
+
     setHand([...hand.slice(0, -1), ...newTiles]);
     setBunch(newBunch);
     setMessage('Dumped ' + tileToReturn.letter + ', drew 3 tiles');
@@ -262,7 +200,7 @@ export default function Bananagrams() {
 
   const getWordsOnGrid = () => {
     const words = [];
-    
+
     for (let row = 0; row < GRID_SIZE; row++) {
       let word = '';
       let startCol = -1;
@@ -301,14 +239,14 @@ export default function Bananagrams() {
   };
 
   const gridWords = getWordsOnGrid();
-  const validWords = gridWords.filter(w => COMMON_WORDS.has(w.word));
+  const validWords = dictionary ? gridWords.filter(w => dictionary.has(w.word)) : [];
 
   const baseFont = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
   const tileStyle = (isSelected) => ({
     width: '44px',
     height: '44px',
-    background: isSelected 
+    background: isSelected
       ? 'linear-gradient(145deg, #4CAF50, #45a049)'
       : 'linear-gradient(145deg, #FFE135, #F4D03F)',
     borderRadius: '8px',
@@ -319,7 +257,7 @@ export default function Bananagrams() {
     fontWeight: '700',
     color: isSelected ? 'white' : '#5D4037',
     cursor: 'pointer',
-    boxShadow: isSelected 
+    boxShadow: isSelected
       ? '0 3px 0 #2E7D32, inset 0 1px 0 rgba(255,255,255,0.4)'
       : '0 3px 0 #D4AC0D, inset 0 1px 0 rgba(255,255,255,0.4)',
     userSelect: 'none',
@@ -331,7 +269,7 @@ export default function Bananagrams() {
   const gridTileStyle = (isSelected) => ({
     width: '36px',
     height: '36px',
-    background: isSelected 
+    background: isSelected
       ? 'linear-gradient(145deg, #4CAF50, #45a049)'
       : 'linear-gradient(145deg, #FFE135, #F4D03F)',
     borderRadius: '5px',
@@ -342,7 +280,7 @@ export default function Bananagrams() {
     fontWeight: '700',
     color: isSelected ? 'white' : '#5D4037',
     cursor: 'pointer',
-    boxShadow: isSelected 
+    boxShadow: isSelected
       ? '0 2px 0 #2E7D32, inset 0 1px 0 rgba(255,255,255,0.4)'
       : '0 2px 0 #D4AC0D, inset 0 1px 0 rgba(255,255,255,0.4)',
     userSelect: 'none',
@@ -386,21 +324,24 @@ export default function Bananagrams() {
           }}>
             Single Player Word Game
           </p>
-          
-          <button onClick={startGame} style={{
-            background: 'linear-gradient(145deg, #4CAF50, #45a049)',
+
+          <button onClick={startGame} disabled={dictionaryLoading} style={{
+            background: dictionaryLoading
+              ? 'linear-gradient(145deg, #999, #888)'
+              : 'linear-gradient(145deg, #4CAF50, #45a049)',
             border: 'none',
             borderRadius: '12px',
             padding: '16px 50px',
             fontSize: '1.25rem',
             color: 'white',
-            cursor: 'pointer',
+            cursor: dictionaryLoading ? 'not-allowed' : 'pointer',
             fontFamily: baseFont,
             fontWeight: '700',
-            boxShadow: '0 6px 0 #2E7D32',
-            touchAction: 'manipulation'
+            boxShadow: dictionaryLoading ? '0 6px 0 #666' : '0 6px 0 #2E7D32',
+            touchAction: 'manipulation',
+            opacity: dictionaryLoading ? 0.7 : 1
           }}>
-            PLAY
+            {dictionaryLoading ? 'Loading Dictionary...' : 'PLAY'}
           </button>
 
           <div style={{
@@ -506,7 +447,7 @@ export default function Bananagrams() {
         <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4037' }}>
           {formatTime(timer)}
         </span>
-        
+
         <div style={{ display: 'flex', gap: '6px', flex: 1, justifyContent: 'center' }}>
           <div style={{
             background: 'rgba(93, 64, 55, 0.15)',
@@ -550,7 +491,7 @@ export default function Bananagrams() {
       <div style={{ display: 'flex', gap: '6px' }}>
         <button onClick={handlePeel} style={{
           flex: 1,
-          background: hand.length === 0 
+          background: hand.length === 0
             ? 'linear-gradient(145deg, #4CAF50, #45a049)'
             : 'linear-gradient(145deg, #666, #555)',
           border: 'none',
@@ -642,25 +583,28 @@ export default function Bananagrams() {
           maxHeight: '70px',
           overflow: 'auto'
         }}>
-          {gridWords.map((w, i) => (
-            <div key={i} style={{
-              padding: '3px 8px',
-              borderRadius: '5px',
-              fontSize: '0.8rem',
-              fontWeight: '600',
-              background: COMMON_WORDS.has(w.word) 
-                ? 'rgba(46, 204, 113, 0.3)' 
-                : 'rgba(231, 76, 60, 0.3)',
-              color: COMMON_WORDS.has(w.word) ? '#2ecc71' : '#e74c3c'
-            }}>
-              {w.word} {COMMON_WORDS.has(w.word) ? '✓' : '?'}
-            </div>
-          ))}
+          {gridWords.map((w, i) => {
+            const isValid = dictionary ? dictionary.has(w.word) : false;
+            return (
+              <div key={i} style={{
+                padding: '3px 8px',
+                borderRadius: '5px',
+                fontSize: '0.8rem',
+                fontWeight: '600',
+                background: isValid
+                  ? 'rgba(46, 204, 113, 0.3)'
+                  : 'rgba(231, 76, 60, 0.3)',
+                color: isValid ? '#2ecc71' : '#e74c3c'
+              }}>
+                {w.word} {isValid ? '✓' : '?'}
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Grid */}
-      <div 
+      <div
         ref={gridRef}
         style={{
           flex: 1,
@@ -684,9 +628,9 @@ export default function Bananagrams() {
         }}>
           {grid.map((row, rowIdx) =>
             row.map((cell, colIdx) => {
-              const isSelected = selectedTile && selectedSource?.type === 'grid' && 
+              const isSelected = selectedTile && selectedSource?.type === 'grid' &&
                 selectedSource?.pos?.row === rowIdx && selectedSource?.pos?.col === colIdx;
-              
+
               return (
                 <div
                   key={`${rowIdx}-${colIdx}`}
@@ -694,7 +638,7 @@ export default function Bananagrams() {
                   style={{
                     width: '36px',
                     height: '36px',
-                    background: cell 
+                    background: cell
                       ? undefined
                       : selectedTile ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255,255,255,0.06)',
                     borderRadius: '5px',
@@ -715,22 +659,22 @@ export default function Bananagrams() {
       </div>
 
       {/* Hand */}
-      <div 
+      <div
         onClick={handleHandAreaTap}
         style={{
-          background: selectedTile && selectedSource?.type === 'grid' 
-            ? 'rgba(76, 175, 80, 0.15)' 
+          background: selectedTile && selectedSource?.type === 'grid'
+            ? 'rgba(76, 175, 80, 0.15)'
             : 'rgba(255,255,255,0.08)',
           borderRadius: '12px',
           padding: '12px',
           minHeight: '80px',
-          border: selectedTile && selectedSource?.type === 'grid' 
-            ? '2px dashed rgba(76, 175, 80, 0.5)' 
+          border: selectedTile && selectedSource?.type === 'grid'
+            ? '2px dashed rgba(76, 175, 80, 0.5)'
             : '2px solid transparent'
         }}
       >
-        <div style={{ 
-          color: 'rgba(255,255,255,0.4)', 
+        <div style={{
+          color: 'rgba(255,255,255,0.4)',
           marginBottom: '8px',
           fontSize: '0.75rem',
           fontWeight: '500',
@@ -763,3 +707,7 @@ export default function Bananagrams() {
     </div>
   );
 }
+
+// Render the app
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<Bananagrams />);
