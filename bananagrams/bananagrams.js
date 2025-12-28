@@ -735,7 +735,7 @@ function Bananagrams() {
           fontSize: '1.3rem',
           border: 'none',
           touchAction: 'manipulation',
-          background-color: rgb(255, 225, 53)
+          background: rgb(255, 225, 53)
         }}>🍌</button>
 
         <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4037' }}>
