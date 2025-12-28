@@ -192,6 +192,11 @@ function Bananagrams() {
     setTimeout(() => setMessage(''), 2000);
   };
 
+  const tips = () => {
+    setMessage('Two-letter words: Qi, ax, za, ew, pa, pi, re, se, ti, ta, sh, jo, za, gi, ma/pa, el,em/en/ex, xi/xu, ka/ki and what I call the Hs: ah/eh/uh/oh/ha/he/hi/hm/ho. More common words: ab, am, an, as, at, ax, aw, by, do, go, if, in, is, me, my, no, of, on, or, ow, pi, sh, to, up, us, we, yo');
+    setTimeout(() => setMessage(''), 30000);
+  };
+
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -661,7 +666,11 @@ function Bananagrams() {
         borderRadius: '12px',
         flexWrap: 'wrap'
       }}>
-        <span style={{ fontSize: '1.3rem' }}>🍌</span>
+        <button onClick={tips} style={{
+          cursor: 'pointer',
+          fontSize: '1.3rem',
+          touchAction: 'manipulation'
+        }}>🍌</button>
         <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4037' }}>
           {formatTime(timer)}
         </span>
