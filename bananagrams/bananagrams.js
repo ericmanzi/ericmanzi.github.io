@@ -434,59 +434,6 @@ function Bananagrams() {
       gap: '8px'
     }}>
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '10px 12px',
-        background: 'linear-gradient(145deg, #FFE135, #F4D03F)',
-        borderRadius: '12px',
-        flexWrap: 'wrap'
-      }}>
-        <span style={{ fontSize: '1.3rem' }}>🍌</span>
-        <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4037' }}>
-          {formatTime(timer)}
-        </span>
-
-        <div style={{ display: 'flex', gap: '6px', flex: 1, justifyContent: 'center' }}>
-          <div style={{
-            background: 'rgba(93, 64, 55, 0.15)',
-            padding: '5px 10px',
-            borderRadius: '6px',
-            color: '#5D4037',
-            fontWeight: '600',
-            fontSize: '0.8rem'
-          }}>
-            Bunch: {bunch.length}
-          </div>
-          <div style={{
-            background: 'rgba(93, 64, 55, 0.15)',
-            padding: '5px 10px',
-            borderRadius: '6px',
-            color: '#5D4037',
-            fontWeight: '600',
-            fontSize: '0.8rem'
-          }}>
-            Hand: {hand.length}
-          </div>
-        </div>
-
-        <button onClick={resetGame} style={{
-          background: '#e74c3c',
-          border: 'none',
-          borderRadius: '6px',
-          padding: '6px 12px',
-          color: 'white',
-          cursor: 'pointer',
-          fontFamily: baseFont,
-          fontWeight: '600',
-          fontSize: '0.8rem',
-          touchAction: 'manipulation'
-        }}>
-          Quit
-        </button>
-      </div>
-
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '6px' }}>
         <button onClick={handlePeel} style={{
@@ -703,6 +650,59 @@ function Bananagrams() {
             );
           })}
         </div>
+      </div>
+      {/* Timer */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '10px 12px',
+        background: 'linear-gradient(145deg, #FFE135, #F4D03F)',
+        borderRadius: '12px',
+        flexWrap: 'wrap'
+      }}>
+        <span style={{ fontSize: '1.3rem' }}>🍌</span>
+        <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#5D4037' }}>
+          {formatTime(timer)}
+        </span>
+
+        <div style={{ display: 'flex', gap: '6px', flex: 1, justifyContent: 'center' }}>
+          <div style={{
+            background: 'rgba(93, 64, 55, 0.15)',
+            padding: '5px 10px',
+            borderRadius: '6px',
+            color: '#5D4037',
+            fontWeight: '600',
+            fontSize: '0.8rem'
+          }}>
+            Bunch: {bunch.length}
+          </div>
+          <div style={{
+            background: 'rgba(93, 64, 55, 0.15)',
+            padding: '5px 10px',
+            borderRadius: '6px',
+            color: '#5D4037',
+            fontWeight: '600',
+            fontSize: '0.8rem'
+          }}>
+            Hand: {hand.length}
+          </div>
+        </div>
+
+        <button onClick={resetGame} style={{
+          background: '#e74c3c',
+          border: 'none',
+          borderRadius: '6px',
+          padding: '6px 12px',
+          color: 'white',
+          cursor: 'pointer',
+          fontFamily: baseFont,
+          fontWeight: '600',
+          fontSize: '0.8rem',
+          touchAction: 'manipulation'
+        }}>
+          Quit
+        </button>
       </div>
     </div>
   );
