@@ -320,7 +320,7 @@ function Bananagrams() {
     if (gameState === 'playing' && !showEasterEgg && easterEggResponse === null) {
       const hasTriggerWord = gridWords.some(w => TRIGGER_WORDS.includes(w.word));
       if (hasTriggerWord) {
-        setShowEasterEgg(true);
+        setShowEasterEgg(false); // false
       }
     }
   }, [gridWords, gameState, showEasterEgg, easterEggResponse]);
@@ -590,7 +590,7 @@ function Bananagrams() {
               fontWeight: '800',
               textShadow: '2px 2px 4px rgba(0,0,0,0.1)'
             }}>
-              Hi Rebekah!
+              Hi!
             </h1>
             <p style={{
               fontSize: '1.5rem',
