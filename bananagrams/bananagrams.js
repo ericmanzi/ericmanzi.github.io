@@ -409,6 +409,20 @@ function Bananagrams() {
             Single Player
           </p>
 
+          <a href="../bananagrams-multiplayer/index.html" style={{
+            display: 'inline-block',
+            marginBottom: '18px',
+            background: 'rgba(255,255,255,0.45)',
+            color: '#5D4037',
+            fontSize: '0.9rem',
+            fontWeight: '600',
+            padding: '8px 18px',
+            borderRadius: '8px',
+            textDecoration: 'none',
+          }}>
+            👥 2 Player Mode →
+          </a>
+
           <button onClick={startGame} disabled={dictionaryLoading} style={{
             background: dictionaryLoading
               ? 'linear-gradient(145deg, #999, #888)'
