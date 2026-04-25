@@ -409,19 +409,22 @@ function Bananagrams() {
             Single Player
           </p>
 
-          <a href="../bananagrams-multiplayer/index.html" style={{
-            display: 'inline-block',
-            marginBottom: '18px',
-            background: 'rgba(255,255,255,0.45)',
-            color: '#5D4037',
-            fontSize: '0.9rem',
-            fontWeight: '600',
-            padding: '8px 18px',
-            borderRadius: '8px',
-            textDecoration: 'none',
-          }}>
-            👥 2 Player Mode →
-          </a>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '18px', justifyContent: 'center' }}>
+            <a href="../bananagrams-multiplayer/index.html" style={{
+              background: 'rgba(255,255,255,0.45)',
+              color: '#5D4037', fontSize: '0.85rem', fontWeight: '600',
+              padding: '8px 14px', borderRadius: '8px', textDecoration: 'none',
+            }}>
+              👥 Pass &amp; Play
+            </a>
+            <a href="../bananagrams-online/index.html" style={{
+              background: 'rgba(255,255,255,0.45)',
+              color: '#5D4037', fontSize: '0.85rem', fontWeight: '600',
+              padding: '8px 14px', borderRadius: '8px', textDecoration: 'none',
+            }}>
+              🌐 Online
+            </a>
+          </div>
 
           <button onClick={startGame} disabled={dictionaryLoading} style={{
             background: dictionaryLoading

@@ -707,6 +707,15 @@ function BananagramsMultiplayer() {
           }}>
             Single Player mode →
           </a>
+          <a href="../bananagrams-online/index.html" style={{
+            display: 'block',
+            marginTop: '8px',
+            color: '#795548',
+            fontSize: '0.85rem',
+            textDecoration: 'underline',
+          }}>
+            Online Multiplayer →
+          </a>
         </div>
       </div>
     );
