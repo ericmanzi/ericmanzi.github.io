@@ -25,42 +25,12 @@ const {
   DeleteConnectionCommand,
 } = require('@aws-sdk/client-apigatewaymanagementapi');
 
+const { STARTING_TILES, NUM_PLAYERS, shuffle, createTileBag, generateRoomCode } = require('./utils');
+
 const dynamo = new DynamoDBClient({});
 const GAMES_TABLE = process.env.GAMES_TABLE || 'bananagrams-games';
 const CONNS_TABLE = process.env.CONNS_TABLE || 'bananagrams-connections';
 const TTL_SECONDS = 2 * 60 * 60; // 2 hours
-const STARTING_TILES = 21;
-const NUM_PLAYERS = 2;
-
-// ── Tile utilities ────────────────────────────────────────────────────────────
-
-const LETTER_DISTRIBUTION = {
-  A: 13, B: 3, C: 3, D: 6, E: 18, F: 3, G: 4, H: 3, I: 12, J: 2, K: 2, L: 5,
-  M: 3, N: 8, O: 11, P: 3, Q: 2, R: 9, S: 6, T: 9, U: 6, V: 3, W: 3, X: 2, Y: 3, Z: 2,
-};
-
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function createTileBag() {
-  const tiles = [];
-  let id = 0;
-  for (const [letter, count] of Object.entries(LETTER_DISTRIBUTION)) {
-    for (let i = 0; i < count; i++) tiles.push({ id: id++, letter });
-  }
-  return shuffle(tiles);
-}
-
-function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
 
 // ── DynamoDB helpers ──────────────────────────────────────────────────────────
 
