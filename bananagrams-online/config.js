@@ -11,4 +11,4 @@
 // Then copy the "WebSocketURL" output value below.
 // Example: wss://abc123xyz.execute-api.us-east-1.amazonaws.com/prod
 
-const WS_URL = 'wss://REPLACE_WITH_YOUR_WEBSOCKET_URL.execute-api.us-east-1.amazonaws.com/prod';
+const WS_URL = 'wss://51obau5kch.execute-api.us-east-1.amazonaws.com/prod';
