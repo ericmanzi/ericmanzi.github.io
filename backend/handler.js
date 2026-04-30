@@ -97,7 +97,16 @@ exports.handler = async (event) => {
           if (opponentConnId) {
             await send(opponentConnId, { type: 'OPPONENT_DISCONNECTED' });
           }
-          // Mark game finished so no further actions are accepted
+          // Mark game paused so the opponent waits while the player can rejoin
+          await dynamo.send(new UpdateItemCommand({
+            TableName: GAMES_TABLE,
+            Key: marshall({ roomCode: conn.roomCode }),
+            UpdateExpression: 'SET #s = :s, pausedRole = :pr',
+            ExpressionAttributeNames: { '#s': 'status' },
+            ExpressionAttributeValues: marshall({ ':s': 'paused', ':pr': conn.role }),
+          }));
+        } else if (game && game.status === 'paused') {
+          // Both players gone — abandon the game
           await dynamo.send(new UpdateItemCommand({
             TableName: GAMES_TABLE,
             Key: marshall({ roomCode: conn.roomCode }),
@@ -176,7 +185,7 @@ exports.handler = async (event) => {
         await dynamo.send(new UpdateItemCommand({
           TableName: GAMES_TABLE,
           Key: marshall({ roomCode }),
-          UpdateExpression: 'SET #s = :playing, bunch = :bunch, guestConnectionId = :gid, #ttl = :ttl',
+          UpdateExpression: 'SET #s = :playing, bunch = :bunch, guestConnectionId = :gid, #ttl = :ttl, hostHand = :hh, guestHand = :gh',
           ConditionExpression: '#s = :waiting',
           ExpressionAttributeNames: { '#s': 'status', '#ttl': 'ttl' },
           ExpressionAttributeValues: marshall({
@@ -185,6 +194,8 @@ exports.handler = async (event) => {
             ':bunch': bunch,
             ':gid': connectionId,
             ':ttl': ttl(),
+            ':hh': hostHand,
+            ':gh': guestHand,
           }),
         }));
       } catch (err) {
@@ -238,8 +249,8 @@ exports.handler = async (event) => {
       await dynamo.send(new UpdateItemCommand({
         TableName: GAMES_TABLE,
         Key: marshall({ roomCode }),
-        UpdateExpression: 'SET bunch = :b',
-        ExpressionAttributeValues: marshall({ ':b': newBunch }),
+        UpdateExpression: 'SET bunch = :b, hostHand = list_append(if_not_exists(hostHand, :empty), :ht), guestHand = list_append(if_not_exists(guestHand, :empty), :gt)',
+        ExpressionAttributeValues: marshall({ ':b': newBunch, ':empty': [], ':ht': [hostTile], ':gt': [guestTile] }),
       }));
 
       await send(hostConnectionId,  { type: 'PEEL_RESULT', tile: hostTile,  bunchSize: newBunch.length, initiator: role });
@@ -264,11 +275,15 @@ exports.handler = async (event) => {
       const newTiles = bunch.slice(0, 3);
       const newBunch = shuffle([...bunch.slice(3), tile]);
 
+      const callerHand = (role === 'host' ? game.hostHand : game.guestHand) || [];
+      const updatedCallerHand = [...callerHand.filter(t => t.id !== tile.id), ...newTiles];
+      const callerHandAttr = role === 'host' ? 'hostHand' : 'guestHand';
+
       await dynamo.send(new UpdateItemCommand({
         TableName: GAMES_TABLE,
         Key: marshall({ roomCode }),
-        UpdateExpression: 'SET bunch = :b',
-        ExpressionAttributeValues: marshall({ ':b': newBunch }),
+        UpdateExpression: `SET bunch = :b, ${callerHandAttr} = :uh`,
+        ExpressionAttributeValues: marshall({ ':b': newBunch, ':uh': updatedCallerHand }),
       }));
 
       await send(callerConnId, {
@@ -278,6 +293,51 @@ exports.handler = async (event) => {
         removedLetter: tile.letter,
         bunchSize: newBunch.length,
       });
+      return { statusCode: 200 };
+    }
+
+    // rejoinRoom ──────────────────────────────────────────────────────────────
+    if (action === 'rejoinRoom') {
+      const { roomCode, role } = body;
+      const game = await getGame(roomCode);
+
+      if (!game) {
+        await send(connectionId, { type: 'ERROR', message: 'Room not found. The game may have expired.' });
+        return { statusCode: 200 };
+      }
+      if (game.status !== 'paused') {
+        await send(connectionId, { type: 'ERROR', message: 'This game is not waiting for a rejoin.' });
+        return { statusCode: 200 };
+      }
+      if (game.pausedRole !== role) {
+        await send(connectionId, { type: 'ERROR', message: 'You are not the disconnected player for this room.' });
+        return { statusCode: 200 };
+      }
+
+      const hand = (role === 'host' ? game.hostHand : game.guestHand) || [];
+      const opponentConnId = role === 'host' ? game.guestConnectionId : game.hostConnectionId;
+      const connIdAttr = role === 'host' ? 'hostConnectionId' : 'guestConnectionId';
+
+      await dynamo.send(new UpdateItemCommand({
+        TableName: GAMES_TABLE,
+        Key: marshall({ roomCode }),
+        UpdateExpression: `SET #s = :s, ${connIdAttr} = :cid REMOVE pausedRole`,
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: marshall({ ':s': 'playing', ':cid': connectionId }),
+      }));
+
+      await dynamo.send(new UpdateItemCommand({
+        TableName: CONNS_TABLE,
+        Key: marshall({ connectionId }),
+        UpdateExpression: 'SET roomCode = :rc, #r = :role',
+        ExpressionAttributeNames: { '#r': 'role' },
+        ExpressionAttributeValues: marshall({ ':rc': roomCode, ':role': role }),
+      }));
+
+      await send(connectionId, { type: 'REJOIN_OK', hand, bunchSize: game.bunch.length, role, roomCode });
+      if (opponentConnId) {
+        await send(opponentConnId, { type: 'OPPONENT_RECONNECTED' });
+      }
       return { statusCode: 200 };
     }
 

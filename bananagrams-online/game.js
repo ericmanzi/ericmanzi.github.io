@@ -6,6 +6,17 @@ const GRID_SIZE = 25;
 const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt';
 const baseFont = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const PING_INTERVAL_MS = 8 * 60 * 1000; // 8 min — keeps API GW connection alive
+const ONLINE_STORAGE_KEY = 'bananagrams_online_state';
+
+function saveOnlineState(state) {
+  try { localStorage.setItem(ONLINE_STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+function loadOnlineState() {
+  try { const s = localStorage.getItem(ONLINE_STORAGE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+}
+function clearOnlineState() {
+  try { localStorage.removeItem(ONLINE_STORAGE_KEY); } catch (e) {}
+}
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
@@ -143,6 +154,7 @@ function OnlineBananagrams() {
   const [dictionary, setDictionary] = useState(null);
   const [dictLoading, setDictLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [savedOnline, setSavedOnline] = useState(null);
 
   // refs for use inside WS callbacks (avoid stale closures)
   const wsRef       = useRef(null);
@@ -172,6 +184,21 @@ function OnlineBananagrams() {
       })
       .catch(() => setDictLoading(false));
   }, []);
+
+  // Refresh savedOnline from localStorage whenever we arrive at the menu screen
+  useEffect(() => {
+    if (screen === 'menu') {
+      const saved = loadOnlineState();
+      setSavedOnline(saved?.roomCode ? saved : null);
+    }
+  }, [screen]);
+
+  // Persist hand + grid + timer to localStorage while playing so rejoin can restore them
+  useEffect(() => {
+    if (screen === 'playing' && roomCode && role) {
+      saveOnlineState({ roomCode, role, hand, grid, timer });
+    }
+  }, [hand, grid, screen, roomCode, role, timer]);
 
   // cleanup on unmount
   useEffect(() => () => {
@@ -280,8 +307,36 @@ function OnlineBananagrams() {
         break;
 
       case 'OPPONENT_DISCONNECTED':
-        showMsg('⚠️ Opponent disconnected. Waiting for them to rejoin is not yet supported — press Quit to return to the menu.', 0);
+        showMsg('⏳ Opponent disconnected — game paused. Waiting for them to rejoin…', 0);
         break;
+
+      case 'OPPONENT_RECONNECTED':
+        showMsg('✅ Opponent reconnected! Game resumes.', 3000);
+        break;
+
+      case 'REJOIN_OK': {
+        setRole(data.role);
+        roleRef.current = data.role;
+        // Use hand from server (authoritative); fall back to locally-saved hand
+        const restoredHand = data.hand?.length > 0 ? data.hand : (loadOnlineState()?.hand || []);
+        setHand(restoredHand);
+        handRef.current = restoredHand;
+        setBunchSize(data.bunchSize);
+        if (data.roomCode) { setRoomCode(data.roomCode); roomRef.current = data.roomCode; }
+        // Restore grid from localStorage (only the client knows where tiles were placed)
+        const savedForGrid = loadOnlineState();
+        const restoredGrid = savedForGrid?.grid || createEmptyGrid();
+        setGrid(restoredGrid);
+        gridRef.current = restoredGrid;
+        setSelected(null);
+        setGameResult(null);
+        setOpponent({ handSize: 0, wordCount: 0 });
+        setMessage('');
+        setScreen('playing');
+        startTimer();
+        startPing();
+        break;
+      }
 
       case 'ERROR':
         setConnError(data.message || 'An error occurred.');
@@ -305,8 +360,10 @@ function OnlineBananagrams() {
     ws.onerror   = () => { setConnError('Could not reach the game server. Check your connection and try again.'); setScreen('error'); };
     ws.onclose   = () => {
       clearInterval(pingRef.current);
-      if (screenRef.current === 'playing' || screenRef.current === 'waiting')
-        showMsg('⚠️ Connection lost. Please refresh and try again.', 0);
+      // Return to menu so the player sees the Rejoin button (state is saved in localStorage)
+      if (screenRef.current === 'playing' || screenRef.current === 'waiting') {
+        setScreen('menu');
+      }
     };
   };
 
@@ -325,6 +382,7 @@ function OnlineBananagrams() {
   const resetToMenu = () => {
     clearInterval(timerRef.current);
     clearInterval(pingRef.current);
+    clearOnlineState();
     wsRef.current?.close();
     wsRef.current = null;
     setScreen('menu');
@@ -337,6 +395,16 @@ function OnlineBananagrams() {
     setSelected(null);
     setMessage('');
     setTimer(0);
+  };
+
+  const rejoinSavedGame = () => {
+    const saved = loadOnlineState();
+    if (!saved) return;
+    const { roomCode: rc, role: r } = saved;
+    setRoomCode(rc);
+    roomRef.current = rc;
+    setScreen('connecting');
+    openWS(() => wsSend({ action: 'rejoinRoom', roomCode: rc, role: r }));
   };
 
   // ── Game actions ───────────────────────────────────────────────────────────
@@ -407,6 +475,11 @@ function OnlineBananagrams() {
           <p style={S.subtitle}>Online Multiplayer</p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+            {savedOnline && (
+              <button onClick={rejoinSavedGame} style={S.btn('linear-gradient(145deg, #e67e22, #d35400)', '#a04000')}>
+                ↩ Rejoin {savedOnline.roomCode}
+              </button>
+            )}
             <button onClick={createRoom} style={S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32')}>
               Create Room
             </button>

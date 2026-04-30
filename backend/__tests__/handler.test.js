@@ -110,7 +110,7 @@ describe('$disconnect', () => {
     expect(apigwMock.commandCalls(PostToConnectionCommand)).toHaveLength(0);
   });
 
-  test('notifies opponent and marks game abandoned when player disconnects mid-game', async () => {
+  test('notifies opponent and marks game paused when player disconnects mid-game', async () => {
     ddbMock
       .on(GetItemCommand)
       .resolvesOnce({ Item: marshalConn({ connectionId: 'host-conn', roomCode: 'ROOM01', role: 'host' }) })
@@ -125,9 +125,31 @@ describe('$disconnect', () => {
     expect(msgs).toHaveLength(1);
     expect(msgs[0].type).toBe('OPPONENT_DISCONNECTED');
 
-    // Game status should be updated to 'abandoned'
+    // Game status should be updated to 'paused' with pausedRole = 'host'
     const updates = ddbMock.commandCalls(UpdateItemCommand);
     expect(updates).toHaveLength(1);
+    const vals = updates[0].args[0].input.ExpressionAttributeValues;
+    expect(vals[':s']).toEqual({ S: 'paused' });
+    expect(vals[':pr']).toEqual({ S: 'host' });
+  });
+
+  test('marks game abandoned when second player disconnects from an already-paused game', async () => {
+    ddbMock
+      .on(GetItemCommand)
+      .resolvesOnce({ Item: marshalConn({ connectionId: 'guest-conn', roomCode: 'ROOM01', role: 'guest' }) })
+      .resolvesOnce({ Item: marshalGame({ status: 'paused', pausedRole: 'host', guestConnectionId: 'guest-conn' }) })
+      .on(UpdateItemCommand).resolves({})
+      .on(DeleteItemCommand).resolves({});
+
+    await handler(event('$disconnect', 'guest-conn'));
+
+    // No WebSocket message needed (disconnected player has no live connection)
+    expect(apigwMock.commandCalls(PostToConnectionCommand)).toHaveLength(0);
+
+    const updates = ddbMock.commandCalls(UpdateItemCommand);
+    expect(updates).toHaveLength(1);
+    const vals = updates[0].args[0].input.ExpressionAttributeValues;
+    expect(vals[':s']).toEqual({ S: 'abandoned' });
   });
 
   test('does not notify anyone if the game is already finished', async () => {
@@ -483,6 +505,107 @@ describe('ping', () => {
     expect(result.statusCode).toBe(200);
     expect(ddbMock.commandCalls(GetItemCommand)).toHaveLength(0);
     expect(apigwMock.commandCalls(PostToConnectionCommand)).toHaveLength(0);
+  });
+});
+
+// ── rejoinRoom ────────────────────────────────────────────────────────────────
+
+describe('rejoinRoom', () => {
+  const HOST_HAND  = [{ id: 0, letter: 'A' }, { id: 1, letter: 'B' }];
+  const GUEST_HAND = [{ id: 2, letter: 'C' }];
+  const BUNCH_TILE = { id: 99, letter: 'Z' };
+
+  const pausedGame = (overrides = {}) => marshalGame({
+    status:            'paused',
+    pausedRole:        'host',
+    hostConnectionId:  'old-host-conn',
+    guestConnectionId: 'guest-conn',
+    hostHand:          HOST_HAND,
+    guestHand:         GUEST_HAND,
+    bunch:             [BUNCH_TILE],
+    ...overrides,
+  });
+
+  test('sends REJOIN_OK with stored hand and bunch size to the rejoining player', async () => {
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: pausedGame() })
+      .on(UpdateItemCommand).resolves({});
+
+    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    const msgs = msgsTo('new-host-conn');
+    const ok   = msgs.find(m => m.type === 'REJOIN_OK');
+    expect(ok).toBeDefined();
+    expect(ok.hand).toEqual(HOST_HAND);
+    expect(ok.bunchSize).toBe(1);
+    expect(ok.role).toBe('host');
+    expect(ok.roomCode).toBe('ROOM01');
+  });
+
+  test('notifies the waiting opponent when player rejoins', async () => {
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: pausedGame() })
+      .on(UpdateItemCommand).resolves({});
+
+    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    const guestMsgs = msgsTo('guest-conn');
+    expect(guestMsgs.find(m => m.type === 'OPPONENT_RECONNECTED')).toBeDefined();
+  });
+
+  test('updates the player connection ID and marks game playing again', async () => {
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: pausedGame() })
+      .on(UpdateItemCommand).resolves({});
+
+    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    const updates = ddbMock.commandCalls(UpdateItemCommand);
+    const gameUpdate = updates.find(u => {
+      const vals = u.args[0].input.ExpressionAttributeValues;
+      return vals?.[':s']?.S === 'playing';
+    });
+    expect(gameUpdate).toBeDefined();
+    expect(gameUpdate.args[0].input.ExpressionAttributeValues[':cid']).toEqual({ S: 'new-host-conn' });
+  });
+
+  test('sends guest hand when guest rejoins', async () => {
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: pausedGame({ pausedRole: 'guest' }) })
+      .on(UpdateItemCommand).resolves({});
+
+    await handler(event('$default', 'new-guest-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'guest' }));
+
+    const ok = msgsTo('new-guest-conn').find(m => m.type === 'REJOIN_OK');
+    expect(ok).toBeDefined();
+    expect(ok.hand).toEqual(GUEST_HAND);
+    expect(ok.role).toBe('guest');
+  });
+
+  test('sends ERROR when game is not found', async () => {
+    ddbMock.on(GetItemCommand).resolves({ Item: undefined });
+
+    await handler(event('$default', 'new-conn', { action: 'rejoinRoom', roomCode: 'BADROOM', role: 'host' }));
+
+    expect(msgsTo('new-conn')[0].type).toBe('ERROR');
+    expect(msgsTo('new-conn')[0].message).toMatch(/not found/i);
+  });
+
+  test('sends ERROR when game is not paused', async () => {
+    ddbMock.on(GetItemCommand).resolves({ Item: marshalGame({ status: 'playing' }) });
+
+    await handler(event('$default', 'new-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    expect(msgsTo('new-conn')[0].type).toBe('ERROR');
+  });
+
+  test('sends ERROR when the rejoining role does not match the disconnected role', async () => {
+    ddbMock.on(GetItemCommand).resolves({ Item: pausedGame({ pausedRole: 'guest' }) });
+
+    await handler(event('$default', 'new-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    expect(msgsTo('new-conn')[0].type).toBe('ERROR');
+    expect(msgsTo('new-conn')[0].message).toMatch(/not the disconnected player/i);
   });
 });
 
