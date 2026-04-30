@@ -613,11 +613,11 @@ function OnlineBananagrams() {
         <div style={{ color: 'rgba(255,255,255,0.35)', marginBottom: '5px', fontSize: '0.68rem', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           Your Hand ({hand.length})
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
           {hand.map(tile => {
             const sel = selected?.tile?.id === tile.id && selected?.source?.type === 'hand';
             return (
-              <div key={tile.id} onClick={() => handleTileSelect(tile, 'hand')} style={{
+              <div key={tile.id} onClick={(e) => { e.stopPropagation(); handleTileSelect(tile, 'hand'); }} style={{
                 width: '40px', height: '40px', borderRadius: '8px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '1.2rem', fontWeight: '700', cursor: 'pointer',
@@ -634,15 +634,19 @@ function OnlineBananagrams() {
         </div>
       </div>
 
-      {/* Selected indicator */}
-      {selected && (
-        <div style={{
-          background: 'rgba(76,175,80,0.25)', padding: '5px 12px', borderRadius: '8px',
-          textAlign: 'center', color: '#4CAF50', fontWeight: '600', fontSize: '0.8rem', flexShrink: 0,
-        }}>
-          "{selected.tile.letter}" selected — tap grid to place, or tap hand area to return
-        </div>
-      )}
+      {/* Selected indicator — always visible */}
+      <div style={{
+        background: selected ? 'rgba(76,175,80,0.25)' : 'rgba(255,255,255,0.06)',
+        padding: '5px 12px', borderRadius: '8px',
+        textAlign: 'center',
+        color: selected ? '#4CAF50' : 'rgba(255,255,255,0.25)',
+        fontWeight: '600', fontSize: '0.8rem', flexShrink: 0,
+        transition: 'background 0.15s, color 0.15s',
+      }}>
+        {selected
+          ? `"${selected.tile.letter}" selected — tap grid to place, or tap hand area to return`
+          : 'Tap a tile to select it'}
+      </div>
 
       {/* Grid */}
       <div style={{
@@ -693,7 +697,7 @@ function OnlineBananagrams() {
           Hand: {hand.length}
         </span>
         <span style={{ background: 'rgba(93,64,55,0.15)', padding: '4px 10px', borderRadius: '6px', color: '#5D4037', fontWeight: '600', fontSize: '0.8rem' }}>
-          Room: {roomRef.current}
+          Room: {roomCode}
         </span>
         <button onClick={resetToMenu} style={{
           marginLeft: 'auto', background: '#e74c3c', border: 'none',
