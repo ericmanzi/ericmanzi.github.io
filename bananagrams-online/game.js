@@ -626,36 +626,31 @@ function OnlineBananagrams() {
       overflow: 'hidden',
     }}>
 
-      {/* Opponent status */}
-      <OpponentBar handSize={opponent.handSize} wordCount={opponent.wordCount} bunchSize={bunchSize} />
-
-      {/* Action bar */}
-      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-        <button onClick={handlePeel} style={{
-          flex: 1, border: 'none', borderRadius: '10px', padding: '11px',
-          fontSize: '0.92rem', color: 'white', cursor: 'pointer', fontFamily: baseFont, fontWeight: '700',
-          background: hand.length === 0 ? 'linear-gradient(145deg, #4CAF50, #45a049)' : 'linear-gradient(145deg, #666, #555)',
-          boxShadow: hand.length === 0 ? '0 4px 0 #2E7D32' : '0 4px 0 #444',
-          touchAction: 'manipulation',
-        }}>
-          🍌 PEEL
-        </button>
-        <button onClick={handleDump} style={{
-          flex: 1, background: 'linear-gradient(145deg, #e67e22, #d35400)',
-          border: 'none', borderRadius: '10px', padding: '11px',
-          fontSize: '0.92rem', color: 'white', cursor: 'pointer', fontFamily: baseFont, fontWeight: '700',
-          boxShadow: '0 4px 0 #a04000', touchAction: 'manipulation',
-        }}>
-          🔄 DUMP
-        </button>
-        <button onClick={() => setShowWords(s => !s)} style={{
-          background: showWords ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)',
-          border: '1px solid rgba(255,255,255,0.2)', borderRadius: '10px',
-          padding: '11px 14px', fontSize: '0.85rem', color: 'white',
-          cursor: 'pointer', fontFamily: baseFont, fontWeight: '600', touchAction: 'manipulation',
-        }}>
-          {gridWords.length}
-        </button>
+      {/* Top bar: opponent stats + PEEL + DUMP merged into one row */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '8px',
+        background: 'rgba(255,255,255,0.08)', borderRadius: '10px',
+        padding: '7px 12px', flexShrink: 0,
+      }}>
+        <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Opp</span>
+        <Pip label="hand"  value={opponent.handSize}  color="#e67e22" />
+        <Pip label="words" value={opponent.wordCount}  color="#2ecc71" />
+        <Pip label="bunch" value={bunchSize}           color="#4a90d9" />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+          <button onClick={handlePeel} style={{
+            border: 'none', borderRadius: '8px', padding: '6px 14px',
+            fontSize: '0.82rem', color: 'white', cursor: 'pointer', fontFamily: baseFont, fontWeight: '700',
+            background: hand.length === 0 ? 'linear-gradient(145deg, #4CAF50, #45a049)' : 'linear-gradient(145deg, #555, #444)',
+            boxShadow: hand.length === 0 ? '0 3px 0 #2E7D32' : '0 3px 0 #333',
+            touchAction: 'manipulation',
+          }}>🍌 PEEL</button>
+          <button onClick={handleDump} style={{
+            border: 'none', borderRadius: '8px', padding: '6px 14px',
+            fontSize: '0.82rem', color: 'white', cursor: 'pointer', fontFamily: baseFont, fontWeight: '700',
+            background: 'linear-gradient(145deg, #e67e22, #d35400)',
+            boxShadow: '0 3px 0 #a04000', touchAction: 'manipulation',
+          }}>🔄 DUMP</button>
+        </div>
       </div>
 
       {/* Message */}
@@ -668,60 +663,6 @@ function OnlineBananagrams() {
           {message}
         </div>
       )}
-
-      {/* Words panel */}
-      {showWords && gridWords.length > 0 && (
-        <div style={{
-          background: 'rgba(255,255,255,0.07)', borderRadius: '10px', padding: '7px',
-          display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '60px', overflow: 'auto', flexShrink: 0,
-        }}>
-          {gridWords.map((w, i) => {
-            const valid = dictionary ? dictionary.has(w.word) : false;
-            return (
-              <span key={i} style={{
-                padding: '2px 7px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600',
-                background: valid ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.25)',
-                color: valid ? '#2ecc71' : '#e74c3c',
-              }}>
-                {w.word} {valid ? '✓' : '?'}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Hand */}
-      <div
-        onClick={handleHandAreaTap}
-        style={{
-          background: selected?.source?.type === 'grid' ? 'rgba(76,175,80,0.15)' : 'rgba(255,255,255,0.07)',
-          borderRadius: '10px', padding: '8px', flexShrink: 0,
-          border: selected?.source?.type === 'grid' ? '2px dashed rgba(76,175,80,0.5)' : '2px solid transparent',
-        }}
-      >
-        <div style={{ color: 'rgba(255,255,255,0.35)', marginBottom: '5px', fontSize: '0.68rem', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          Your Hand ({hand.length})
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-          {hand.map(tile => {
-            const sel = selected?.tile?.id === tile.id && selected?.source?.type === 'hand';
-            return (
-              <div key={tile.id} onClick={(e) => { e.stopPropagation(); handleTileSelect(tile, 'hand'); }} style={{
-                width: '40px', height: '40px', borderRadius: '8px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.2rem', fontWeight: '700', cursor: 'pointer',
-                userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'manipulation',
-                background: sel ? 'linear-gradient(145deg, #4CAF50, #45a049)' : 'linear-gradient(145deg, #FFE135, #F4D03F)',
-                color: sel ? 'white' : '#5D4037',
-                boxShadow: sel ? '0 2px 0 #2E7D32, inset 0 1px 0 rgba(255,255,255,0.4)' : '0 2px 0 #D4AC0D, inset 0 1px 0 rgba(255,255,255,0.4)',
-                transition: 'all 0.12s ease',
-              }}>
-                {tile.letter}
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Grid */}
       <div style={{
@@ -758,6 +699,60 @@ function OnlineBananagrams() {
           )}
         </div>
       </div>
+
+      {/* Hand — moved below the grid */}
+      <div
+        onClick={handleHandAreaTap}
+        style={{
+          background: selected?.source?.type === 'grid' ? 'rgba(76,175,80,0.15)' : 'rgba(255,255,255,0.07)',
+          borderRadius: '10px', padding: '8px', flexShrink: 0,
+          border: selected?.source?.type === 'grid' ? '2px dashed rgba(76,175,80,0.5)' : '2px solid transparent',
+        }}
+      >
+        <div style={{ color: 'rgba(255,255,255,0.35)', marginBottom: '5px', fontSize: '0.68rem', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          Your Hand ({hand.length})
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+          {hand.map(tile => {
+            const sel = selected?.tile?.id === tile.id && selected?.source?.type === 'hand';
+            return (
+              <div key={tile.id} onClick={(e) => { e.stopPropagation(); handleTileSelect(tile, 'hand'); }} style={{
+                width: '40px', height: '40px', borderRadius: '8px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '1.2rem', fontWeight: '700', cursor: 'pointer',
+                userSelect: 'none', WebkitUserSelect: 'none', touchAction: 'manipulation',
+                background: sel ? 'linear-gradient(145deg, #4CAF50, #45a049)' : 'linear-gradient(145deg, #FFE135, #F4D03F)',
+                color: sel ? 'white' : '#5D4037',
+                boxShadow: sel ? '0 2px 0 #2E7D32, inset 0 1px 0 rgba(255,255,255,0.4)' : '0 2px 0 #D4AC0D, inset 0 1px 0 rgba(255,255,255,0.4)',
+                transition: 'all 0.12s ease',
+              }}>
+                {tile.letter}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Words panel — always visible at the bottom when words exist */}
+      {gridWords.length > 0 && (
+        <div style={{
+          background: 'rgba(255,255,255,0.07)', borderRadius: '10px', padding: '7px',
+          display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '56px', overflow: 'auto', flexShrink: 0,
+        }}>
+          {gridWords.map((w, i) => {
+            const valid = dictionary ? dictionary.has(w.word) : false;
+            return (
+              <span key={i} style={{
+                padding: '2px 7px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600',
+                background: valid ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.25)',
+                color: valid ? '#2ecc71' : '#e74c3c',
+              }}>
+                {w.word} {valid ? '✓' : '?'}
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* Bottom bar */}
       <div style={{

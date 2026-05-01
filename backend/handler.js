@@ -305,11 +305,13 @@ exports.handler = async (event) => {
         await send(connectionId, { type: 'ERROR', message: 'Room not found. The game may have expired.' });
         return { statusCode: 200 };
       }
-      if (game.status !== 'paused') {
-        await send(connectionId, { type: 'ERROR', message: 'This game is not waiting for a rejoin.' });
+      // Accept paused (normal disconnect) or still-playing (missed $disconnect event)
+      if (game.status !== 'paused' && game.status !== 'playing') {
+        await send(connectionId, { type: 'ERROR', message: 'This game is no longer active.' });
         return { statusCode: 200 };
       }
-      if (game.pausedRole !== role) {
+      // For paused games, verify the role matches who disconnected
+      if (game.status === 'paused' && game.pausedRole && game.pausedRole !== role) {
         await send(connectionId, { type: 'ERROR', message: 'You are not the disconnected player for this room.' });
         return { statusCode: 200 };
       }
