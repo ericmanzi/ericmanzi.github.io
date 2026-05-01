@@ -723,20 +723,6 @@ function OnlineBananagrams() {
         </div>
       </div>
 
-      {/* Selected indicator — always visible */}
-      <div style={{
-        background: selected ? 'rgba(76,175,80,0.25)' : 'rgba(255,255,255,0.06)',
-        padding: '5px 12px', borderRadius: '8px',
-        textAlign: 'center',
-        color: selected ? '#4CAF50' : 'rgba(255,255,255,0.25)',
-        fontWeight: '600', fontSize: '0.8rem', flexShrink: 0,
-        transition: 'background 0.15s, color 0.15s',
-      }}>
-        {selected
-          ? `"${selected.tile.letter}" — tap grid to place or hand to return`
-          : 'Tap a tile to select it'}
-      </div>
-
       {/* Grid */}
       <div style={{
         flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: '12px',
