@@ -591,12 +591,24 @@ describe('rejoinRoom', () => {
     expect(msgsTo('new-conn')[0].message).toMatch(/not found/i);
   });
 
-  test('sends ERROR when game is not paused', async () => {
-    ddbMock.on(GetItemCommand).resolves({ Item: marshalGame({ status: 'playing' }) });
+  test('sends ERROR when game is finished or abandoned (not rejoinable)', async () => {
+    ddbMock.on(GetItemCommand).resolves({ Item: marshalGame({ status: 'finished' }) });
 
     await handler(event('$default', 'new-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
 
     expect(msgsTo('new-conn')[0].type).toBe('ERROR');
+  });
+
+  test('allows rejoin when game status is still playing (missed $disconnect)', async () => {
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: pausedGame({ status: 'playing', pausedRole: null }) })
+      .on(UpdateItemCommand).resolves({});
+
+    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    const ok = msgsTo('new-host-conn').find(m => m.type === 'REJOIN_OK');
+    expect(ok).toBeDefined();
+    expect(ok.hand).toEqual(HOST_HAND);
   });
 
   test('sends ERROR when the rejoining role does not match the disconnected role', async () => {
