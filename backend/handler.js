@@ -130,10 +130,14 @@ exports.handler = async (event) => {
     // createRoom ──────────────────────────────────────────────────────────────
     if (action === 'createRoom') {
       let roomCode = generateRoomCode();
-      // Retry once on collision (astronomically rare at our traffic levels)
-      const existing = await getGame(roomCode);
+      let existing = await getGame(roomCode);
       if (existing && existing.status !== 'finished' && existing.status !== 'abandoned') {
         roomCode = generateRoomCode();
+        existing = await getGame(roomCode);
+        if (existing && existing.status !== 'finished' && existing.status !== 'abandoned') {
+          await send(connectionId, { type: 'ERROR', message: 'Could not generate a unique room code. Please try again.' });
+          return { statusCode: 200 };
+        }
       }
 
       await dynamo.send(new PutItemCommand({
@@ -228,6 +232,11 @@ exports.handler = async (event) => {
 
       const { bunch, hostConnectionId, guestConnectionId } = game;
 
+      // Verify the caller is who they claim to be
+      if (connectionId !== (role === 'host' ? hostConnectionId : guestConnectionId)) {
+        return { statusCode: 200 };
+      }
+
       if (bunch.length < NUM_PLAYERS) {
         // Caller wins — not enough tiles for everyone
         await dynamo.send(new UpdateItemCommand({
@@ -242,16 +251,24 @@ exports.handler = async (event) => {
         return { statusCode: 200 };
       }
 
-      const hostTile  = bunch[0];
-      const guestTile = bunch[1];
-      const newBunch  = bunch.slice(2);
+      const hostTile    = bunch[0];
+      const guestTile   = bunch[1];
+      const newBunch    = bunch.slice(2);
+      const peelVersion = game.peelVersion ?? -1;
 
-      await dynamo.send(new UpdateItemCommand({
-        TableName: GAMES_TABLE,
-        Key: marshall({ roomCode }),
-        UpdateExpression: 'SET bunch = :b, hostHand = list_append(if_not_exists(hostHand, :empty), :ht), guestHand = list_append(if_not_exists(guestHand, :empty), :gt)',
-        ExpressionAttributeValues: marshall({ ':b': newBunch, ':empty': [], ':ht': [hostTile], ':gt': [guestTile] }),
-      }));
+      try {
+        await dynamo.send(new UpdateItemCommand({
+          TableName: GAMES_TABLE,
+          Key: marshall({ roomCode }),
+          UpdateExpression: 'SET bunch = :b, peelVersion = :npv, hostHand = list_append(if_not_exists(hostHand, :empty), :ht), guestHand = list_append(if_not_exists(guestHand, :empty), :gt)',
+          ConditionExpression: 'attribute_not_exists(peelVersion) OR peelVersion = :pv',
+          ExpressionAttributeValues: marshall({ ':b': newBunch, ':empty': [], ':ht': [hostTile], ':gt': [guestTile], ':pv': peelVersion, ':npv': peelVersion + 1 }),
+        }));
+      } catch (err) {
+        // Another concurrent peel already processed — the other Lambda sent PEEL_RESULT to both players
+        if (err.name === 'ConditionalCheckFailedException') return { statusCode: 200 };
+        throw err;
+      }
 
       await send(hostConnectionId,  { type: 'PEEL_RESULT', tile: hostTile,  bunchSize: newBunch.length, initiator: role });
       await send(guestConnectionId, { type: 'PEEL_RESULT', tile: guestTile, bunchSize: newBunch.length, initiator: role });
@@ -265,6 +282,10 @@ exports.handler = async (event) => {
       if (!game || game.status !== 'playing') return { statusCode: 200 };
 
       const callerConnId = role === 'host' ? game.hostConnectionId : game.guestConnectionId;
+
+      // Verify the caller is who they claim to be
+      if (connectionId !== callerConnId) return { statusCode: 200 };
+
       const { bunch } = game;
 
       if (bunch.length < 3) {
@@ -272,10 +293,15 @@ exports.handler = async (event) => {
         return { statusCode: 200 };
       }
 
+      const callerHand = (role === 'host' ? game.hostHand : game.guestHand) || [];
+      if (!callerHand.some(t => t.id === tile?.id)) {
+        await send(callerConnId, { type: 'DUMP_ERROR', reason: 'Tile not in hand.' });
+        return { statusCode: 200 };
+      }
+
       const newTiles = bunch.slice(0, 3);
       const newBunch = shuffle([...bunch.slice(3), tile]);
 
-      const callerHand = (role === 'host' ? game.hostHand : game.guestHand) || [];
       const updatedCallerHand = [...callerHand.filter(t => t.id !== tile.id), ...newTiles];
       const callerHandAttr = role === 'host' ? 'hostHand' : 'guestHand';
 
@@ -314,6 +340,26 @@ exports.handler = async (event) => {
       if (game.status === 'paused' && game.pausedRole && game.pausedRole !== role) {
         await send(connectionId, { type: 'ERROR', message: 'You are not the disconnected player for this room.' });
         return { statusCode: 200 };
+      }
+      // For playing games (missed $disconnect), verify the old connection is actually gone
+      if (game.status === 'playing') {
+        const existingConnId = role === 'host' ? game.hostConnectionId : game.guestConnectionId;
+        if (existingConnId) {
+          let connectionAlive = false;
+          try {
+            await apigw.send(new PostToConnectionCommand({
+              ConnectionId: existingConnId,
+              Data: JSON.stringify({ type: 'PING' }),
+            }));
+            connectionAlive = true;
+          } catch (err) {
+            if (err.$metadata?.httpStatusCode !== 410) throw err;
+          }
+          if (connectionAlive) {
+            await send(connectionId, { type: 'ERROR', message: 'That player is still connected to the game.' });
+            return { statusCode: 200 };
+          }
+        }
       }
 
       const hand = (role === 'host' ? game.hostHand : game.guestHand) || [];

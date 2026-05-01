@@ -210,6 +210,17 @@ describe('createRoom', () => {
     expect(result.statusCode).toBe(200);
     expect(msgsTo('host-conn')[0].type).toBe('ROOM_CREATED');
   });
+
+  test('sends ERROR when both generated room codes collide with live games', async () => {
+    ddbMock
+      .on(GetItemCommand)
+      .resolvesOnce({ Item: marshalGame({ status: 'waiting' }) })   // first code: collision
+      .resolvesOnce({ Item: marshalGame({ status: 'playing' }) });  // second code: also collision
+
+    const result = await handler(event('$default', 'host-conn', { action: 'createRoom' }));
+    expect(result.statusCode).toBe(200);
+    expect(msgsTo('host-conn')[0].type).toBe('ERROR');
+  });
 });
 
 // ── joinRoom ──────────────────────────────────────────────────────────────────
@@ -380,6 +391,8 @@ describe('dump', () => {
     status:            'playing',
     hostConnectionId:  'host-conn',
     guestConnectionId: 'guest-conn',
+    hostHand:          [RETURNED_TILE],
+    guestHand:         [RETURNED_TILE],
     bunch,
   });
 
@@ -600,6 +613,11 @@ describe('rejoinRoom', () => {
   });
 
   test('allows rejoin when game status is still playing (missed $disconnect)', async () => {
+    // Probe to the old connection must 410 before rejoin is permitted
+    apigwMock
+      .on(PostToConnectionCommand)
+      .rejectsOnce(Object.assign(new Error('Gone'), { $metadata: { httpStatusCode: 410 } }))
+      .resolves({});
     ddbMock
       .on(GetItemCommand).resolves({ Item: pausedGame({ status: 'playing', pausedRole: null }) })
       .on(UpdateItemCommand).resolves({});
@@ -609,6 +627,18 @@ describe('rejoinRoom', () => {
     const ok = msgsTo('new-host-conn').find(m => m.type === 'REJOIN_OK');
     expect(ok).toBeDefined();
     expect(ok.hand).toEqual(HOST_HAND);
+  });
+
+  test('sends ERROR when the claimed role connection is still alive (playing game)', async () => {
+    // Default apigwMock resolves (connection alive) — no override needed
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: pausedGame({ status: 'playing', pausedRole: null }) });
+
+    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    const msgs = msgsTo('new-host-conn');
+    expect(msgs[0].type).toBe('ERROR');
+    expect(msgs[0].message).toMatch(/still connected/i);
   });
 
   test('sends ERROR when the rejoining role does not match the disconnected role', async () => {
