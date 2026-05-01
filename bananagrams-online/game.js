@@ -379,6 +379,8 @@ function OnlineBananagrams() {
   const joinRoom = () => {
     const code = joinInput.trim().toUpperCase();
     if (!code) return;
+    setRoomCode(code);
+    roomRef.current = code;
     setScreen('connecting');
     openWS(() => wsSend({ action: 'joinRoom', roomCode: code }));
   };
@@ -430,9 +432,10 @@ function OnlineBananagrams() {
   const handleDump = () => {
     if (hand.length === 0) { showMsg('No tiles in hand to dump!'); return; }
     if (bunchSize < 3)     { showMsg('Not enough tiles in the bunch!'); return; }
-    const tile = hand[hand.length - 1];
-    // Optimistic: remove tile immediately; server sends DUMP_RESULT with 3 new tiles
-    setHand(prev => prev.slice(0, -1));
+    // Prefer the selected hand tile; fall back to the last tile in hand
+    const tile = selected?.source?.type === 'hand' ? selected.tile : hand[hand.length - 1];
+    setSelected(null);
+    setHand(prev => prev.filter(t => t.id !== tile.id));
     wsSend({ action: 'dump', roomCode: roomRef.current, role: roleRef.current, tile });
   };
 
@@ -718,20 +721,6 @@ function OnlineBananagrams() {
             );
           })}
         </div>
-      </div>
-
-      {/* Selected indicator — always visible */}
-      <div style={{
-        background: selected ? 'rgba(76,175,80,0.25)' : 'rgba(255,255,255,0.06)',
-        padding: '5px 12px', borderRadius: '8px',
-        textAlign: 'center',
-        color: selected ? '#4CAF50' : 'rgba(255,255,255,0.25)',
-        fontWeight: '600', fontSize: '0.8rem', flexShrink: 0,
-        transition: 'background 0.15s, color 0.15s',
-      }}>
-        {selected
-          ? `"${selected.tile.letter}" selected — tap grid to place, or tap hand area to return`
-          : 'Tap a tile to select it'}
       </div>
 
       {/* Grid */}
