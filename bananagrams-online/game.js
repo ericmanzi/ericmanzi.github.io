@@ -432,9 +432,10 @@ function OnlineBananagrams() {
   const handleDump = () => {
     if (hand.length === 0) { showMsg('No tiles in hand to dump!'); return; }
     if (bunchSize < 3)     { showMsg('Not enough tiles in the bunch!'); return; }
-    const tile = hand[hand.length - 1];
-    // Optimistic: remove tile immediately; server sends DUMP_RESULT with 3 new tiles
-    setHand(prev => prev.slice(0, -1));
+    // Prefer the selected hand tile; fall back to the last tile in hand
+    const tile = selected?.source?.type === 'hand' ? selected.tile : hand[hand.length - 1];
+    setSelected(null);
+    setHand(prev => prev.filter(t => t.id !== tile.id));
     wsSend({ action: 'dump', roomCode: roomRef.current, role: roleRef.current, tile });
   };
 
@@ -732,7 +733,7 @@ function OnlineBananagrams() {
         transition: 'background 0.15s, color 0.15s',
       }}>
         {selected
-          ? `"${selected.tile.letter}" selected — tap grid to place, or tap hand area to return`
+          ? `"${selected.tile.letter}" — tap grid to place or hand to return`
           : 'Tap a tile to select it'}
       </div>
 
