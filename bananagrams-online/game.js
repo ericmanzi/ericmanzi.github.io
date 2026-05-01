@@ -148,7 +148,6 @@ function OnlineBananagrams() {
   const [bunchSize, setBunchSize] = useState(0);
   const [opponent, setOpponent] = useState({ handSize: 21, wordCount: 0 });
   const [message, setMessage] = useState('');
-  const [showWords, setShowWords] = useState(false);
   const [timer, setTimer] = useState(0);
   const [gameResult, setGameResult] = useState(null); // { winner: 'me'|'them' }
   const [dictionary, setDictionary] = useState(null);
@@ -333,7 +332,10 @@ function OnlineBananagrams() {
         setOpponent({ handSize: 0, wordCount: 0 });
         setMessage('');
         setScreen('playing');
-        startTimer();
+        clearInterval(timerRef.current);
+        const restoredTimer = savedForGrid?.timer || 0;
+        setTimer(restoredTimer);
+        timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
         startPing();
         break;
       }
@@ -452,7 +454,7 @@ function OnlineBananagrams() {
       if (grid[row][col]) handleTileSelect(grid[row][col], 'grid', { row, col });
       return;
     }
-    if (grid[row][col]) return;
+    if (grid[row][col]) { showMsg('That cell is occupied — tap an empty cell.'); return; }
 
     const newGrid = grid.map(r => [...r]);
     newGrid[row][col] = selected.tile;
