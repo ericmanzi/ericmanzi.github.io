@@ -360,9 +360,13 @@ function OnlineBananagrams() {
     ws.onerror   = () => { setConnError('Could not reach the game server. Check your connection and try again.'); setScreen('error'); };
     ws.onclose   = () => {
       clearInterval(pingRef.current);
-      // Return to menu so the player sees the Rejoin button (state is saved in localStorage)
-      if (screenRef.current === 'playing' || screenRef.current === 'waiting') {
+      const s = screenRef.current;
+      if (s === 'playing' || s === 'waiting') {
         setScreen('menu');
+      } else if (s === 'connecting') {
+        // WS closed before we got a response — surface an error rather than hanging
+        setConnError('Connection closed before the game could start. Check your connection and try again.');
+        setScreen('error');
       }
     };
   };
@@ -405,6 +409,15 @@ function OnlineBananagrams() {
     roomRef.current = rc;
     setScreen('connecting');
     openWS(() => wsSend({ action: 'rejoinRoom', roomCode: rc, role: r }));
+    // If the server doesn't reply within 8 s (e.g. backend not yet redeployed),
+    // stop waiting and show a clear error instead of hanging on 'connecting'.
+    setTimeout(() => {
+      if (screenRef.current !== 'connecting') return;
+      wsRef.current?.close();
+      clearOnlineState();
+      setConnError('No response from the server — the session may have expired. Start a new game.');
+      setScreen('error');
+    }, 8000);
   };
 
   // ── Game actions ───────────────────────────────────────────────────────────
