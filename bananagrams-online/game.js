@@ -379,6 +379,8 @@ function OnlineBananagrams() {
   const joinRoom = () => {
     const code = joinInput.trim().toUpperCase();
     if (!code) return;
+    setRoomCode(code);
+    roomRef.current = code;
     setScreen('connecting');
     openWS(() => wsSend({ action: 'joinRoom', roomCode: code }));
   };
