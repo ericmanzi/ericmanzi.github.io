@@ -634,7 +634,6 @@ function OnlineBananagrams() {
       }}>
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Opp</span>
         <Pip label="hand"  value={opponent.handSize}  color="#e67e22" />
-        <Pip label="words" value={opponent.wordCount}  color="#2ecc71" />
         <Pip label="bunch" value={bunchSize}           color="#4a90d9" />
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
           <button onClick={handlePeel} style={{
