@@ -133,7 +133,7 @@ describe('$disconnect', () => {
     expect(vals[':pr']).toEqual({ S: 'host' });
   });
 
-  test('marks game abandoned when second player disconnects from an already-paused game', async () => {
+  test('keeps game paused and clears waiting player connectionId when second player disconnects', async () => {
     ddbMock
       .on(GetItemCommand)
       .resolvesOnce({ Item: marshalConn({ connectionId: 'guest-conn', roomCode: 'ROOM01', role: 'guest' }) })
@@ -143,13 +143,15 @@ describe('$disconnect', () => {
 
     await handler(event('$disconnect', 'guest-conn'));
 
-    // No WebSocket message needed (disconnected player has no live connection)
     expect(apigwMock.commandCalls(PostToConnectionCommand)).toHaveLength(0);
 
     const updates = ddbMock.commandCalls(UpdateItemCommand);
     expect(updates).toHaveLength(1);
-    const vals = updates[0].args[0].input.ExpressionAttributeValues;
-    expect(vals[':s']).toEqual({ S: 'abandoned' });
+    // Should REMOVE pausedRole and guestConnectionId so both players can rejoin
+    const expr = updates[0].args[0].input.UpdateExpression;
+    expect(expr).toMatch(/REMOVE/i);
+    expect(expr).toContain('pausedRole');
+    expect(expr).toContain('guestConnectionId');
   });
 
   test('does not notify anyone if the game is already finished', async () => {
