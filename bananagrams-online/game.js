@@ -616,8 +616,6 @@ function OnlineBananagrams() {
 
   // ── Playing screen ─────────────────────────────────────────────────────────
 
-  const gridWords = getWordsOnGrid(grid);
-
   return (
     <div style={{
       height: '100vh',
@@ -734,27 +732,6 @@ function OnlineBananagrams() {
           })}
         </div>
       </div>
-
-      {/* Words panel — always visible at the bottom when words exist */}
-      {gridWords.length > 0 && (
-        <div style={{
-          background: 'rgba(255,255,255,0.07)', borderRadius: '10px', padding: '7px',
-          display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '56px', overflow: 'auto', flexShrink: 0,
-        }}>
-          {gridWords.map((w, i) => {
-            const valid = dictionary ? dictionary.has(w.word) : false;
-            return (
-              <span key={i} style={{
-                padding: '2px 7px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600',
-                background: valid ? 'rgba(46,204,113,0.25)' : 'rgba(231,76,60,0.25)',
-                color: valid ? '#2ecc71' : '#e74c3c',
-              }}>
-                {w.word} {valid ? '✓' : '?'}
-              </span>
-            );
-          })}
-        </div>
-      )}
 
       {/* Bottom bar */}
       <div style={{

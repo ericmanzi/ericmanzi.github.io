@@ -106,13 +106,13 @@ exports.handler = async (event) => {
             ExpressionAttributeValues: marshall({ ':s': 'paused', ':pr': conn.role }),
           }));
         } else if (game && game.status === 'paused') {
-          // Both players gone — abandon the game
+          // The waiting player also left. Clear their connectionId and remove pausedRole
+          // so either player can rejoin once they return. TTL handles final cleanup.
+          const connIdAttr = conn.role === 'host' ? 'hostConnectionId' : 'guestConnectionId';
           await dynamo.send(new UpdateItemCommand({
             TableName: GAMES_TABLE,
             Key: marshall({ roomCode: conn.roomCode }),
-            UpdateExpression: 'SET #s = :s',
-            ExpressionAttributeNames: { '#s': 'status' },
-            ExpressionAttributeValues: marshall({ ':s': 'abandoned' }),
+            UpdateExpression: `REMOVE pausedRole, ${connIdAttr}`,
           }));
         }
       }
