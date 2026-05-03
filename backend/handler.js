@@ -91,20 +91,27 @@ exports.handler = async (event) => {
       if (conn?.roomCode) {
         const game = await getGame(conn.roomCode);
         if (game && game.status === 'playing') {
-          const opponentConnId = conn.role === 'host'
-            ? game.guestConnectionId
-            : game.hostConnectionId;
-          if (opponentConnId) {
-            await send(opponentConnId, { type: 'OPPONENT_DISCONNECTED' });
+          // Only pause when the disconnecting connection is still the active one for its
+          // role. A player may have already rejoined with a new connection ID, in which
+          // case the delayed $disconnect for the old connection must not re-pause the game.
+          const activeConnId = conn.role === 'host'
+            ? game.hostConnectionId
+            : game.guestConnectionId;
+          if (activeConnId === connectionId) {
+            const opponentConnId = conn.role === 'host'
+              ? game.guestConnectionId
+              : game.hostConnectionId;
+            if (opponentConnId) {
+              await send(opponentConnId, { type: 'OPPONENT_DISCONNECTED' });
+            }
+            await dynamo.send(new UpdateItemCommand({
+              TableName: GAMES_TABLE,
+              Key: marshall({ roomCode: conn.roomCode }),
+              UpdateExpression: 'SET #s = :s, pausedRole = :pr',
+              ExpressionAttributeNames: { '#s': 'status' },
+              ExpressionAttributeValues: marshall({ ':s': 'paused', ':pr': conn.role }),
+            }));
           }
-          // Mark game paused so the opponent waits while the player can rejoin
-          await dynamo.send(new UpdateItemCommand({
-            TableName: GAMES_TABLE,
-            Key: marshall({ roomCode: conn.roomCode }),
-            UpdateExpression: 'SET #s = :s, pausedRole = :pr',
-            ExpressionAttributeNames: { '#s': 'status' },
-            ExpressionAttributeValues: marshall({ ':s': 'paused', ':pr': conn.role }),
-          }));
         } else if (game && game.status === 'paused') {
           // The waiting player also left. Clear their connectionId and remove pausedRole
           // so either player can rejoin once they return. TTL handles final cleanup.
@@ -352,8 +359,10 @@ exports.handler = async (event) => {
               Data: JSON.stringify({ type: 'PING' }),
             }));
             connectionAlive = true;
-          } catch (err) {
-            if (err.$metadata?.httpStatusCode !== 410) throw err;
+          } catch {
+            // Any error (410 Gone, 403, 404, etc.) means the connection is dead.
+            // Do NOT rethrow — a non-410 code must not crash the handler and leave
+            // the rejoining client hanging with no response.
           }
           if (connectionAlive) {
             await send(connectionId, { type: 'ERROR', message: 'That player is still connected to the game.' });
