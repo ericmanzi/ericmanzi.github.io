@@ -539,7 +539,6 @@ function OnlineBananagrams() {
 
           <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <a href="../bananagrams/index.html" style={{ color: '#795548', fontSize: '0.85rem' }}>Single Player →</a>
-            <a href="../bananagrams-multiplayer/index.html" style={{ color: '#795548', fontSize: '0.85rem' }}>Pass &amp; Play →</a>
           </div>
         </div>
       </div>
