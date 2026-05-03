@@ -332,17 +332,19 @@ function OnlineBananagrams() {
       case 'REJOIN_OK': {
         setRole(data.role);
         roleRef.current = data.role;
-        // Use hand from server (authoritative); fall back to locally-saved hand
-        const restoredHand = data.hand?.length > 0 ? data.hand : (loadOnlineState()?.hand || []);
-        setHand(restoredHand);
-        handRef.current = restoredHand;
         setBunchSize(data.bunchSize);
         if (data.roomCode) { setRoomCode(data.roomCode); roomRef.current = data.roomCode; }
         // Restore grid from localStorage (only the client knows where tiles were placed)
-        const savedForGrid = loadOnlineState();
-        const restoredGrid = savedForGrid?.grid || createEmptyGrid();
+        const savedState = loadOnlineState();
+        const restoredGrid = savedState?.grid || createEmptyGrid();
         setGrid(restoredGrid);
         gridRef.current = restoredGrid;
+        // The server tracks all tiles ever dealt (never removes placed tiles).
+        // Derive the actual unplaced hand by subtracting tiles already on the grid.
+        const gridTileIds = new Set(restoredGrid.flat().filter(Boolean).map(t => t.id));
+        const restoredHand = (data.hand || []).filter(t => !gridTileIds.has(t.id));
+        setHand(restoredHand);
+        handRef.current = restoredHand;
         setSelected(null);
         setGameResult(null);
         setOpponent({ handSize: 0, wordCount: 0 });
@@ -351,7 +353,7 @@ function OnlineBananagrams() {
         pendingTauntRef.current = null;
         setScreen('playing');
         clearInterval(timerRef.current);
-        const restoredTimer = savedForGrid?.timer || 0;
+        const restoredTimer = savedState?.timer || 0;
         setTimer(restoredTimer);
         timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
         startPing();
