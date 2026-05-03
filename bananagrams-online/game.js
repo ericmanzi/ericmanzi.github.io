@@ -7,6 +7,13 @@ const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/mas
 const baseFont = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const PING_INTERVAL_MS = 8 * 60 * 1000; // 8 min — keeps API GW connection alive
 const ONLINE_STORAGE_KEY = 'bananagrams_online_state';
+const TWO_LETTER_TAUNTS = [
+  "Wow, you really sat there for three minutes just to play a two-letter word.",
+  "That's not a word, that's a cry for help.",
+  "You know the tiles are free, right? You can use more than two letters.",
+  "Really pushing the boundaries of human vocabulary there with those words.",
+  "Two letters? At least commit to three. Have some self-respect.",
+];
 
 function saveOnlineState(state) {
   try { localStorage.setItem(ONLINE_STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
@@ -164,7 +171,9 @@ function OnlineBananagrams() {
   const roomRef     = useRef('');
   const handRef     = useRef([]);
   const gridRef     = useRef(createEmptyGrid());
-  const screenRef   = useRef('menu');
+  const screenRef        = useRef('menu');
+  const prevPeelWordsRef = useRef(new Set());
+  const pendingTauntRef  = useRef(null);
 
   // keep refs in sync
   useEffect(() => { roleRef.current   = role;     }, [role]);
@@ -268,6 +277,8 @@ function OnlineBananagrams() {
         setOpponent({ handSize: 21, wordCount: 0 });
         setMessage('');
         setBunchSize(data.bunchSize);
+        prevPeelWordsRef.current = new Set();
+        pendingTauntRef.current = null;
         setScreen('playing');
         startTimer();
         startPing();
@@ -278,9 +289,14 @@ function OnlineBananagrams() {
         setHand(prev => [...prev, data.tile]);
         setBunchSize(data.bunchSize);
         const byMe = data.initiator === roleRef.current;
-        showMsg(byMe
-          ? `🍌 PEEL! Drew: ${data.tile.letter}  (${data.bunchSize} left)`
-          : `🍌 Opponent peeled! You drew: ${data.tile.letter}`);
+        if (byMe && pendingTauntRef.current) {
+          showMsg(pendingTauntRef.current, 6000);
+          pendingTauntRef.current = null;
+        } else {
+          showMsg(byMe
+            ? `🍌 PEEL! Drew: ${data.tile.letter}  (${data.bunchSize} left)`
+            : `🍌 Opponent peeled! You drew: ${data.tile.letter}`);
+        }
         break;
       }
 
@@ -331,6 +347,8 @@ function OnlineBananagrams() {
         setGameResult(null);
         setOpponent({ handSize: 0, wordCount: 0 });
         setMessage('');
+        prevPeelWordsRef.current = new Set();
+        pendingTauntRef.current = null;
         setScreen('playing');
         clearInterval(timerRef.current);
         const restoredTimer = savedForGrid?.timer || 0;
@@ -428,6 +446,21 @@ function OnlineBananagrams() {
 
   const handlePeel = () => {
     if (hand.length > 0) { showMsg('Place all your tiles before peeling!'); return; }
+    if (dictionary) {
+      const words = getWordsOnGrid(grid);
+      if (words.some(w => !dictionary.has(w.word))) {
+        showMsg('Fix invalid words before peeling!');
+        return;
+      }
+    }
+    const twoLetterNow = new Set(
+      getWordsOnGrid(grid).filter(w => w.word.length === 2).map(w => w.word)
+    );
+    const hasNewTwoLetter = [...twoLetterNow].some(w => !prevPeelWordsRef.current.has(w));
+    if (hasNewTwoLetter) {
+      pendingTauntRef.current = TWO_LETTER_TAUNTS[Math.floor(Math.random() * TWO_LETTER_TAUNTS.length)];
+    }
+    prevPeelWordsRef.current = twoLetterNow;
     wsSend({ action: 'peel', roomCode: roomRef.current, role: roleRef.current });
   };
 
@@ -532,7 +565,6 @@ function OnlineBananagrams() {
 
           <div style={{ marginTop: '16px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <a href="../bananagrams/index.html" style={{ color: '#795548', fontSize: '0.85rem' }}>Single Player →</a>
-            <a href="../bananagrams-multiplayer/index.html" style={{ color: '#795548', fontSize: '0.85rem' }}>Pass &amp; Play →</a>
           </div>
         </div>
       </div>
@@ -616,6 +648,21 @@ function OnlineBananagrams() {
 
   // ── Playing screen ─────────────────────────────────────────────────────────
 
+  // Compute which grid cells belong to invalid words so they can be highlighted.
+  const gridWords = getWordsOnGrid(grid);
+  const invalidWordCells = new Set();
+  if (dictionary) {
+    for (const { word, row, col, direction } of gridWords) {
+      if (!dictionary.has(word)) {
+        for (let i = 0; i < word.length; i++) {
+          invalidWordCells.add(`${direction === 'h' ? row : row + i}-${direction === 'h' ? col + i : col}`);
+        }
+      }
+    }
+  }
+  const hasInvalidWords = invalidWordCells.size > 0;
+  const canPeel = hand.length === 0 && !hasInvalidWords;
+
   return (
     <div style={{
       height: '100vh',
@@ -639,8 +686,12 @@ function OnlineBananagrams() {
           <button onClick={handlePeel} style={{
             border: 'none', borderRadius: '8px', padding: '6px 14px',
             fontSize: '0.82rem', color: 'white', cursor: 'pointer', fontFamily: baseFont, fontWeight: '700',
-            background: hand.length === 0 ? 'linear-gradient(145deg, #4CAF50, #45a049)' : 'linear-gradient(145deg, #555, #444)',
-            boxShadow: hand.length === 0 ? '0 3px 0 #2E7D32' : '0 3px 0 #333',
+            background: canPeel
+              ? 'linear-gradient(145deg, #4CAF50, #45a049)'
+              : hasInvalidWords
+                ? 'linear-gradient(145deg, #e74c3c, #c0392b)'
+                : 'linear-gradient(145deg, #555, #444)',
+            boxShadow: canPeel ? '0 3px 0 #2E7D32' : hasInvalidWords ? '0 3px 0 #922b21' : '0 3px 0 #333',
             touchAction: 'manipulation',
           }}>🍌 PEEL</button>
           <button onClick={handleDump} style={{
@@ -678,6 +729,7 @@ function OnlineBananagrams() {
             row.map((cell, colIdx) => {
               const isCellSel = selected?.source?.type === 'grid' &&
                 selected.source.pos.row === rowIdx && selected.source.pos.col === colIdx;
+              const isCellInvalid = cell && invalidWordCells.has(`${rowIdx}-${colIdx}`);
               return (
                 <div key={`${rowIdx}-${colIdx}`} onClick={() => handleGridCellTap(rowIdx, colIdx)} style={{
                   width: '34px', height: '34px', borderRadius: '4px',
@@ -685,10 +737,14 @@ function OnlineBananagrams() {
                   cursor: 'pointer', touchAction: 'manipulation',
                   userSelect: 'none', WebkitUserSelect: 'none',
                   ...(cell ? {
-                    background: isCellSel ? 'linear-gradient(145deg, #4CAF50, #45a049)' : 'linear-gradient(145deg, #FFE135, #F4D03F)',
+                    background: isCellSel
+                      ? 'linear-gradient(145deg, #4CAF50, #45a049)'
+                      : isCellInvalid
+                        ? 'linear-gradient(145deg, #e74c3c, #c0392b)'
+                        : 'linear-gradient(145deg, #FFE135, #F4D03F)',
                     fontSize: '1rem', fontWeight: '700',
-                    color: isCellSel ? 'white' : '#5D4037',
-                    boxShadow: isCellSel ? '0 2px 0 #2E7D32' : '0 2px 0 #D4AC0D',
+                    color: (isCellSel || isCellInvalid) ? 'white' : '#5D4037',
+                    boxShadow: isCellSel ? '0 2px 0 #2E7D32' : isCellInvalid ? '0 2px 0 #922b21' : '0 2px 0 #D4AC0D',
                   } : {
                     background: selected?.tile ? 'rgba(76,175,80,0.18)' : 'rgba(255,255,255,0.05)',
                   }),

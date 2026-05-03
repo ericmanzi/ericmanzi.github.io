@@ -11,6 +11,13 @@ const STARTING_TILES = 21;
 const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt';
 const STORAGE_KEY = 'bananagrams_game_state';
 const TRIGGER_WORDS = ['EL', 'EM', 'EN', 'EX', 'RE', 'MI', 'FA', 'LA', 'TI'];
+const TWO_LETTER_TAUNTS = [
+  "Wow, you really sat there for three minutes just to play a two-letter word.",
+  "That's not a word, that's a cry for help.",
+  "You know the tiles are free, right? You can use more than two letters.",
+  "Really pushing the boundaries of human vocabulary there with those words.",
+  "Two letters? At least commit to three. Have some self-respect.",
+];
 const PASTEBIN_API_KEY = 'RPhCpcJRds2FA9J43iMJfOC-FiOSWys-';
 
 function saveGameState(state) {
@@ -77,6 +84,7 @@ function Bananagrams() {
   const [easterEggResponse, setEasterEggResponse] = useState(null);
   const timerRef = useRef(null);
   const gridRef = useRef(null);
+  const prevPeelWordsRef = useRef(new Set());
 
   const startGame = () => {
     // Clear any saved game state when starting fresh
@@ -94,6 +102,7 @@ function Bananagrams() {
     setMessage('');
     setSelectedTile(null);
     setSelectedSource(null);
+    prevPeelWordsRef.current = new Set();
 
     timerRef.current = setInterval(() => {
       setTimer(t => t + 1);
@@ -223,6 +232,15 @@ function Bananagrams() {
       return;
     }
 
+    if (dictionary) {
+      const words = getWordsOnGrid();
+      if (words.some(w => !dictionary.has(w.word))) {
+        setMessage('Fix invalid words before peeling!');
+        setTimeout(() => setMessage(''), 2000);
+        return;
+      }
+    }
+
     if (bunch.length === 0) {
       // Clear saved game state when winning
       clearGameState();
@@ -231,11 +249,23 @@ function Bananagrams() {
       return;
     }
 
+    const twoLetterNow = new Set(
+      getWordsOnGrid().filter(w => w.word.length === 2).map(w => w.word)
+    );
+    const hasNewTwoLetter = [...twoLetterNow].some(w => !prevPeelWordsRef.current.has(w));
+    prevPeelWordsRef.current = twoLetterNow;
+
     const newTile = bunch[0];
     setHand([...hand, newTile]);
     setBunch(bunch.slice(1));
-    setMessage('🍌 PEEL! Drew: ' + newTile.letter);
-    setTimeout(() => setMessage(''), 1500);
+    if (hasNewTwoLetter) {
+      const taunt = TWO_LETTER_TAUNTS[Math.floor(Math.random() * TWO_LETTER_TAUNTS.length)];
+      setMessage(taunt);
+      setTimeout(() => setMessage(''), 6000);
+    } else {
+      setMessage('🍌 PEEL! Drew: ' + newTile.letter);
+      setTimeout(() => setMessage(''), 1500);
+    }
   };
 
   const handleDump = () => {
@@ -315,6 +345,19 @@ function Bananagrams() {
   const gridWords = getWordsOnGrid();
   const validWords = dictionary ? gridWords.filter(w => dictionary.has(w.word)) : [];
 
+  const invalidWordCells = new Set();
+  if (dictionary) {
+    for (const { word, row, col, direction } of gridWords) {
+      if (!dictionary.has(word)) {
+        for (let i = 0; i < word.length; i++) {
+          invalidWordCells.add(`${direction === 'h' ? row : row + i}-${direction === 'h' ? col + i : col}`);
+        }
+      }
+    }
+  }
+  const hasInvalidWords = invalidWordCells.size > 0;
+  const canPeel = hand.length === 0 && !hasInvalidWords;
+
   // Check for Easter egg trigger words
   useEffect(() => {
     if (gameState === 'playing' && !showEasterEgg && easterEggResponse === null) {
@@ -350,23 +393,27 @@ function Bananagrams() {
     transition: 'all 0.15s ease'
   });
 
-  const gridTileStyle = (isSelected) => ({
+  const gridTileStyle = (isSelected, isInvalid = false) => ({
     width: '36px',
     height: '36px',
     background: isSelected
       ? 'linear-gradient(145deg, #4CAF50, #45a049)'
-      : 'linear-gradient(145deg, #FFE135, #F4D03F)',
+      : isInvalid
+        ? 'linear-gradient(145deg, #e74c3c, #c0392b)'
+        : 'linear-gradient(145deg, #FFE135, #F4D03F)',
     borderRadius: '5px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '1.1rem',
     fontWeight: '700',
-    color: isSelected ? 'white' : '#5D4037',
+    color: (isSelected || isInvalid) ? 'white' : '#5D4037',
     cursor: 'pointer',
     boxShadow: isSelected
       ? '0 2px 0 #2E7D32, inset 0 1px 0 rgba(255,255,255,0.4)'
-      : '0 2px 0 #D4AC0D, inset 0 1px 0 rgba(255,255,255,0.4)',
+      : isInvalid
+        ? '0 2px 0 #922b21, inset 0 1px 0 rgba(255,255,255,0.3)'
+        : '0 2px 0 #D4AC0D, inset 0 1px 0 rgba(255,255,255,0.4)',
     userSelect: 'none',
     WebkitUserSelect: 'none',
     touchAction: 'manipulation'
@@ -410,13 +457,6 @@ function Bananagrams() {
           </p>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '18px', justifyContent: 'center' }}>
-            <a href="../bananagrams-multiplayer/index.html" style={{
-              background: 'rgba(255,255,255,0.45)',
-              color: '#5D4037', fontSize: '0.85rem', fontWeight: '600',
-              padding: '8px 14px', borderRadius: '8px', textDecoration: 'none',
-            }}>
-              👥 Pass &amp; Play
-            </a>
             <a href="../bananagrams-online/index.html" style={{
               background: 'rgba(255,255,255,0.45)',
               color: '#5D4037', fontSize: '0.85rem', fontWeight: '600',
@@ -693,9 +733,11 @@ function Bananagrams() {
       <div style={{ display: 'flex', gap: '6px' }}>
         <button onClick={handlePeel} style={{
           flex: 1,
-          background: hand.length === 0
+          background: canPeel
             ? 'linear-gradient(145deg, #4CAF50, #45a049)'
-            : 'linear-gradient(145deg, #666, #555)',
+            : hasInvalidWords
+              ? 'linear-gradient(145deg, #e74c3c, #c0392b)'
+              : 'linear-gradient(145deg, #666, #555)',
           border: 'none',
           borderRadius: '10px',
           padding: '12px',
@@ -704,7 +746,7 @@ function Bananagrams() {
           cursor: 'pointer',
           fontFamily: baseFont,
           fontWeight: '700',
-          boxShadow: hand.length === 0 ? '0 4px 0 #2E7D32' : '0 4px 0 #444',
+          boxShadow: canPeel ? '0 4px 0 #2E7D32' : hasInvalidWords ? '0 4px 0 #922b21' : '0 4px 0 #444',
           touchAction: 'manipulation'
         }}>
           🍌 PEEL
@@ -864,6 +906,7 @@ function Bananagrams() {
             row.map((cell, colIdx) => {
               const isSelected = selectedTile && selectedSource?.type === 'grid' &&
                 selectedSource?.pos?.row === rowIdx && selectedSource?.pos?.col === colIdx;
+              const isCellInvalid = cell && invalidWordCells.has(`${rowIdx}-${colIdx}`);
 
               return (
                 <div
@@ -881,7 +924,7 @@ function Bananagrams() {
                     justifyContent: 'center',
                     cursor: 'pointer',
                     touchAction: 'manipulation',
-                    ...(cell ? gridTileStyle(isSelected) : {})
+                    ...(cell ? gridTileStyle(isSelected, isCellInvalid) : {})
                   }}
                 >
                   {cell?.letter}
