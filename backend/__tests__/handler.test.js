@@ -154,6 +154,25 @@ describe('$disconnect', () => {
     expect(expr).toContain('guestConnectionId');
   });
 
+  test('does not re-pause game when the disconnecting connection is no longer the active one', async () => {
+    // Player has already rejoined with a new connection ID ('new-host-conn') but the
+    // delayed $disconnect for the old connection ('host-conn') fires afterwards.
+    ddbMock
+      .on(GetItemCommand)
+      .resolvesOnce({ Item: marshalConn({ connectionId: 'host-conn', roomCode: 'ROOM01', role: 'host' }) })
+      .resolvesOnce({ Item: marshalGame({ status: 'playing', hostConnectionId: 'new-host-conn', guestConnectionId: 'guest-conn' }) })
+      .on(DeleteItemCommand).resolves({});
+
+    await handler(event('$disconnect', 'host-conn'));
+
+    // Opponent must NOT be notified — the host already rejoined
+    expect(apigwMock.commandCalls(PostToConnectionCommand)).toHaveLength(0);
+    // Game must NOT be paused
+    expect(ddbMock.commandCalls(UpdateItemCommand)).toHaveLength(0);
+    // Stale connection record should still be cleaned up
+    expect(ddbMock.commandCalls(DeleteItemCommand)).toHaveLength(1);
+  });
+
   test('does not notify anyone if the game is already finished', async () => {
     ddbMock
       .on(GetItemCommand)
@@ -619,6 +638,24 @@ describe('rejoinRoom', () => {
     apigwMock
       .on(PostToConnectionCommand)
       .rejectsOnce(Object.assign(new Error('Gone'), { $metadata: { httpStatusCode: 410 } }))
+      .resolves({});
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: pausedGame({ status: 'playing', pausedRole: null }) })
+      .on(UpdateItemCommand).resolves({});
+
+    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    const ok = msgsTo('new-host-conn').find(m => m.type === 'REJOIN_OK');
+    expect(ok).toBeDefined();
+    expect(ok.hand).toEqual(HOST_HAND);
+  });
+
+  test('proceeds with rejoin when old connection ping returns a non-410 error', async () => {
+    // API GW can return non-410 codes (403, 404, etc.) for stale/expired connections.
+    // The handler must treat any ping error as "connection dead" rather than crashing.
+    apigwMock
+      .on(PostToConnectionCommand)
+      .rejectsOnce(Object.assign(new Error('Forbidden'), { $metadata: { httpStatusCode: 403 } }))
       .resolves({});
     ddbMock
       .on(GetItemCommand).resolves({ Item: pausedGame({ status: 'playing', pausedRole: null }) })
