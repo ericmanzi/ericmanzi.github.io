@@ -348,28 +348,12 @@ exports.handler = async (event) => {
         await send(connectionId, { type: 'ERROR', message: 'You are not the disconnected player for this room.' });
         return { statusCode: 200 };
       }
-      // For playing games (missed $disconnect), verify the old connection is actually gone
-      if (game.status === 'playing') {
-        const existingConnId = role === 'host' ? game.hostConnectionId : game.guestConnectionId;
-        if (existingConnId) {
-          let connectionAlive = false;
-          try {
-            await apigw.send(new PostToConnectionCommand({
-              ConnectionId: existingConnId,
-              Data: JSON.stringify({ type: 'PING' }),
-            }));
-            connectionAlive = true;
-          } catch {
-            // Any error (410 Gone, 403, 404, etc.) means the connection is dead.
-            // Do NOT rethrow — a non-410 code must not crash the handler and leave
-            // the rejoining client hanging with no response.
-          }
-          if (connectionAlive) {
-            await send(connectionId, { type: 'ERROR', message: 'That player is still connected to the game.' });
-            return { statusCode: 200 };
-          }
-        }
-      }
+      // No liveness check for the 'playing' case: the client fires onclose and
+      // immediately reconnects, so $disconnect often hasn't been processed yet and
+      // the old API GW connection still responds to pings. The $disconnect handler
+      // already guards against stale disconnects re-pausing the game (it compares
+      // the active connectionId before pausing), so it's safe to allow the rejoin
+      // unconditionally here.
 
       const hand = (role === 'host' ? game.hostHand : game.guestHand) || [];
       const opponentConnId = role === 'host' ? game.guestConnectionId : game.hostConnectionId;

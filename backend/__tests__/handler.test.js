@@ -633,12 +633,10 @@ describe('rejoinRoom', () => {
     expect(msgsTo('new-conn')[0].type).toBe('ERROR');
   });
 
-  test('allows rejoin when game status is still playing (missed $disconnect)', async () => {
-    // Probe to the old connection must 410 before rejoin is permitted
-    apigwMock
-      .on(PostToConnectionCommand)
-      .rejectsOnce(Object.assign(new Error('Gone'), { $metadata: { httpStatusCode: 410 } }))
-      .resolves({});
+  test('allows rejoin when game status is still playing (missed or delayed $disconnect)', async () => {
+    // The client reconnects before $disconnect is processed, so the game is still
+    // 'playing'. Rejoin must succeed without any liveness check — the $disconnect
+    // guard (activeConnId check) prevents the stale disconnect from re-pausing the game.
     ddbMock
       .on(GetItemCommand).resolves({ Item: pausedGame({ status: 'playing', pausedRole: null }) })
       .on(UpdateItemCommand).resolves({});
@@ -648,36 +646,6 @@ describe('rejoinRoom', () => {
     const ok = msgsTo('new-host-conn').find(m => m.type === 'REJOIN_OK');
     expect(ok).toBeDefined();
     expect(ok.hand).toEqual(HOST_HAND);
-  });
-
-  test('proceeds with rejoin when old connection ping returns a non-410 error', async () => {
-    // API GW can return non-410 codes (403, 404, etc.) for stale/expired connections.
-    // The handler must treat any ping error as "connection dead" rather than crashing.
-    apigwMock
-      .on(PostToConnectionCommand)
-      .rejectsOnce(Object.assign(new Error('Forbidden'), { $metadata: { httpStatusCode: 403 } }))
-      .resolves({});
-    ddbMock
-      .on(GetItemCommand).resolves({ Item: pausedGame({ status: 'playing', pausedRole: null }) })
-      .on(UpdateItemCommand).resolves({});
-
-    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
-
-    const ok = msgsTo('new-host-conn').find(m => m.type === 'REJOIN_OK');
-    expect(ok).toBeDefined();
-    expect(ok.hand).toEqual(HOST_HAND);
-  });
-
-  test('sends ERROR when the claimed role connection is still alive (playing game)', async () => {
-    // Default apigwMock resolves (connection alive) — no override needed
-    ddbMock
-      .on(GetItemCommand).resolves({ Item: pausedGame({ status: 'playing', pausedRole: null }) });
-
-    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
-
-    const msgs = msgsTo('new-host-conn');
-    expect(msgs[0].type).toBe('ERROR');
-    expect(msgs[0].message).toMatch(/still connected/i);
   });
 
   test('sends ERROR when the rejoining role does not match the disconnected role', async () => {

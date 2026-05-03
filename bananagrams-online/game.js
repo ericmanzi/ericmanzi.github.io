@@ -652,12 +652,14 @@ function OnlineBananagrams() {
         </div>
       </div>
 
-      {/* Message */}
+      {/* Message — fixed overlay so it hovers over the top bar without shifting layout */}
       {message && (
         <div style={{
+          position: 'fixed', top: '8px', left: '8px', right: '8px', zIndex: 100,
           background: 'linear-gradient(145deg, #FFE135, #F4D03F)',
           padding: '8px 14px', borderRadius: '10px',
-          textAlign: 'center', color: '#5D4037', fontWeight: '600', fontSize: '0.9rem', flexShrink: 0,
+          textAlign: 'center', color: '#5D4037', fontWeight: '600', fontSize: '0.9rem',
+          pointerEvents: 'none',
         }}>
           {message}
         </div>
