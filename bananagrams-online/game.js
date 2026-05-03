@@ -7,6 +7,13 @@ const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/mas
 const baseFont = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const PING_INTERVAL_MS = 8 * 60 * 1000; // 8 min — keeps API GW connection alive
 const ONLINE_STORAGE_KEY = 'bananagrams_online_state';
+const TWO_LETTER_TAUNTS = [
+  "Wow, you really sat there for three minutes just to play a two-letter word.",
+  "That's not a word, that's a cry for help.",
+  "You know the tiles are free, right? You can use more than two letters.",
+  "Really pushing the boundaries of human vocabulary there with those words.",
+  "Two letters? At least commit to three. Have some self-respect.",
+];
 
 function saveOnlineState(state) {
   try { localStorage.setItem(ONLINE_STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
@@ -164,7 +171,9 @@ function OnlineBananagrams() {
   const roomRef     = useRef('');
   const handRef     = useRef([]);
   const gridRef     = useRef(createEmptyGrid());
-  const screenRef   = useRef('menu');
+  const screenRef        = useRef('menu');
+  const prevPeelWordsRef = useRef(new Set());
+  const pendingTauntRef  = useRef(null);
 
   // keep refs in sync
   useEffect(() => { roleRef.current   = role;     }, [role]);
@@ -268,6 +277,8 @@ function OnlineBananagrams() {
         setOpponent({ handSize: 21, wordCount: 0 });
         setMessage('');
         setBunchSize(data.bunchSize);
+        prevPeelWordsRef.current = new Set();
+        pendingTauntRef.current = null;
         setScreen('playing');
         startTimer();
         startPing();
@@ -278,9 +289,14 @@ function OnlineBananagrams() {
         setHand(prev => [...prev, data.tile]);
         setBunchSize(data.bunchSize);
         const byMe = data.initiator === roleRef.current;
-        showMsg(byMe
-          ? `🍌 PEEL! Drew: ${data.tile.letter}  (${data.bunchSize} left)`
-          : `🍌 Opponent peeled! You drew: ${data.tile.letter}`);
+        if (byMe && pendingTauntRef.current) {
+          showMsg(pendingTauntRef.current, 6000);
+          pendingTauntRef.current = null;
+        } else {
+          showMsg(byMe
+            ? `🍌 PEEL! Drew: ${data.tile.letter}  (${data.bunchSize} left)`
+            : `🍌 Opponent peeled! You drew: ${data.tile.letter}`);
+        }
         break;
       }
 
@@ -331,6 +347,8 @@ function OnlineBananagrams() {
         setGameResult(null);
         setOpponent({ handSize: 0, wordCount: 0 });
         setMessage('');
+        prevPeelWordsRef.current = new Set();
+        pendingTauntRef.current = null;
         setScreen('playing');
         clearInterval(timerRef.current);
         const restoredTimer = savedForGrid?.timer || 0;
@@ -435,6 +453,14 @@ function OnlineBananagrams() {
         return;
       }
     }
+    const twoLetterNow = new Set(
+      getWordsOnGrid(grid).filter(w => w.word.length === 2).map(w => w.word)
+    );
+    const hasNewTwoLetter = [...twoLetterNow].some(w => !prevPeelWordsRef.current.has(w));
+    if (hasNewTwoLetter) {
+      pendingTauntRef.current = TWO_LETTER_TAUNTS[Math.floor(Math.random() * TWO_LETTER_TAUNTS.length)];
+    }
+    prevPeelWordsRef.current = twoLetterNow;
     wsSend({ action: 'peel', roomCode: roomRef.current, role: roleRef.current });
   };
 

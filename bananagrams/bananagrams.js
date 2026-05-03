@@ -11,6 +11,13 @@ const STARTING_TILES = 21;
 const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt';
 const STORAGE_KEY = 'bananagrams_game_state';
 const TRIGGER_WORDS = ['EL', 'EM', 'EN', 'EX', 'RE', 'MI', 'FA', 'LA', 'TI'];
+const TWO_LETTER_TAUNTS = [
+  "Wow, you really sat there for three minutes just to play a two-letter word.",
+  "That's not a word, that's a cry for help.",
+  "You know the tiles are free, right? You can use more than two letters.",
+  "Really pushing the boundaries of human vocabulary there with those words.",
+  "Two letters? At least commit to three. Have some self-respect.",
+];
 const PASTEBIN_API_KEY = 'RPhCpcJRds2FA9J43iMJfOC-FiOSWys-';
 
 function saveGameState(state) {
@@ -77,6 +84,7 @@ function Bananagrams() {
   const [easterEggResponse, setEasterEggResponse] = useState(null);
   const timerRef = useRef(null);
   const gridRef = useRef(null);
+  const prevPeelWordsRef = useRef(new Set());
 
   const startGame = () => {
     // Clear any saved game state when starting fresh
@@ -94,6 +102,7 @@ function Bananagrams() {
     setMessage('');
     setSelectedTile(null);
     setSelectedSource(null);
+    prevPeelWordsRef.current = new Set();
 
     timerRef.current = setInterval(() => {
       setTimer(t => t + 1);
@@ -240,11 +249,23 @@ function Bananagrams() {
       return;
     }
 
+    const twoLetterNow = new Set(
+      getWordsOnGrid().filter(w => w.word.length === 2).map(w => w.word)
+    );
+    const hasNewTwoLetter = [...twoLetterNow].some(w => !prevPeelWordsRef.current.has(w));
+    prevPeelWordsRef.current = twoLetterNow;
+
     const newTile = bunch[0];
     setHand([...hand, newTile]);
     setBunch(bunch.slice(1));
-    setMessage('🍌 PEEL! Drew: ' + newTile.letter);
-    setTimeout(() => setMessage(''), 1500);
+    if (hasNewTwoLetter) {
+      const taunt = TWO_LETTER_TAUNTS[Math.floor(Math.random() * TWO_LETTER_TAUNTS.length)];
+      setMessage(taunt);
+      setTimeout(() => setMessage(''), 6000);
+    } else {
+      setMessage('🍌 PEEL! Drew: ' + newTile.letter);
+      setTimeout(() => setMessage(''), 1500);
+    }
   };
 
   const handleDump = () => {
