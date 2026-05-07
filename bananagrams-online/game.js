@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useCallback } = React;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -7,6 +7,7 @@ const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/mas
 const baseFont = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const PING_INTERVAL_MS = 8 * 60 * 1000; // 8 min — keeps API GW connection alive
 const ONLINE_STORAGE_KEY = 'bananagrams_online_state';
+const OPPONENT_REJOIN_TIMEOUT_MS = 2 * 60 * 1000; // 2 min before offering quit
 const TWO_LETTER_TAUNTS = [
   "Wow, you really sat there for three minutes just to play a two-letter word.",
   "That's not a word, that's a cry for help.",
@@ -65,6 +66,32 @@ function getWordsOnGrid(grid) {
   return words;
 }
 
+// Returns true if all placed tiles form a single connected component (or board is empty).
+function isBoardConnected(grid) {
+  const tiles = [];
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (grid[r][c]) tiles.push([r, c]);
+    }
+  }
+  if (tiles.length <= 1) return true;
+  const visited = new Set();
+  const queue = [tiles[0]];
+  visited.add(`${tiles[0][0]}-${tiles[0][1]}`);
+  while (queue.length > 0) {
+    const [r, c] = queue.shift();
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nr = r + dr, nc = c + dc;
+      const key = `${nr}-${nc}`;
+      if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE && grid[nr][nc] && !visited.has(key)) {
+        visited.add(key);
+        queue.push([nr, nc]);
+      }
+    }
+  }
+  return visited.size === tiles.length;
+}
+
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const S = {
@@ -108,26 +135,68 @@ const S = {
   },
 };
 
-// ── OpponentBar ──────────────────────────────────────────────────────────────
+// ── HelpModal ─────────────────────────────────────────────────────────────────
 
-function OpponentBar({ handSize, wordCount, bunchSize }) {
+function HelpModal({ onClose }) {
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.08)', borderRadius: '10px',
-      padding: '8px 14px', display: 'flex', alignItems: 'center',
-      gap: '10px', flexShrink: 0,
-    }}>
-      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.72rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        Opponent
-      </span>
-      <Pip label="hand" value={handSize} color="#e67e22" />
-      <Pip label="words" value={wordCount} color="#2ecc71" />
-      <div style={{ marginLeft: 'auto' }}>
-        <Pip label="bunch" value={bunchSize} color="#4a90d9" />
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(0,0,0,0.7)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '20px',
+    }} onClick={onClose}>
+      <div style={{
+        background: 'linear-gradient(145deg, #FFE135, #F4D03F)',
+        borderRadius: '20px', padding: '28px 28px 24px',
+        maxWidth: '400px', width: '100%', maxHeight: '85vh', overflowY: 'auto',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        textAlign: 'left',
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h2 style={{ color: '#5D4037', fontWeight: '800', fontSize: '1.4rem', margin: 0 }}>How to Play</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#795548', padding: '0 4px' }}>✕</button>
+        </div>
+        <div style={{ color: '#5D4037', fontSize: '0.9rem', lineHeight: '1.8' }}>
+          <strong style={{ fontSize: '1rem' }}>🎯 Goal</strong><br/>
+          Be the first to empty your hand when the bunch runs out of tiles.<br/><br/>
+
+          <strong style={{ fontSize: '1rem' }}>🖐 Placing Tiles</strong><br/>
+          • <strong>Tap a tile</strong> in your hand to select it (it glows green).<br/>
+          • <strong>Tap an empty cell</strong> on the board to place it there.<br/>
+          • <strong>Tap the same tile again</strong> (or press Escape) to deselect it.<br/>
+          • <strong>Tap a board tile</strong> to pick it up and move it.<br/>
+          • <strong>Tap the hand area</strong> (below the board) while a board tile is selected to return it to your hand.<br/><br/>
+
+          <strong style={{ fontSize: '1rem' }}>📋 Rules</strong><br/>
+          • All placed tiles must form <strong>one connected crossword</strong> — no isolated groups.<br/>
+          • Every sequence of 2+ tiles must be a valid word (horizontal and vertical).<br/>
+          • Single isolated tiles are not allowed at PEEL time.<br/><br/>
+
+          <strong style={{ fontSize: '1rem' }}>🍌 PEEL</strong><br/>
+          • Place all your tiles on the board in valid, connected words.<br/>
+          • Press <strong>PEEL</strong> — both players draw 1 new tile from the bunch.<br/>
+          • If the bunch has fewer than 2 tiles left and your board is valid, you win!<br/><br/>
+
+          <strong style={{ fontSize: '1rem' }}>🔄 DUMP</strong><br/>
+          • Select a tile from your hand, then press <strong>DUMP</strong>.<br/>
+          • You return that tile and draw 3 new ones (bunch must have ≥ 3 tiles).<br/><br/>
+
+          <strong style={{ fontSize: '1rem' }}>⌨️ Keyboard Shortcuts</strong><br/>
+          • <strong>Escape</strong> — deselect the current tile.
+        </div>
+        <button onClick={onClose} style={{
+          marginTop: '20px', width: '100%',
+          background: 'linear-gradient(145deg, #4CAF50, #45a049)',
+          border: 'none', borderRadius: '10px', padding: '12px',
+          color: 'white', fontFamily: baseFont, fontWeight: '700',
+          fontSize: '1rem', cursor: 'pointer',
+        }}>Got it!</button>
       </div>
     </div>
   );
 }
+
+// ── OpponentBar ──────────────────────────────────────────────────────────────
 
 function Pip({ label, value, color }) {
   return (
@@ -146,6 +215,7 @@ function OnlineBananagrams() {
   const [joinInput, setJoinInput] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [connError, setConnError] = useState('');
+  const [errorAllowRetry, setErrorAllowRetry] = useState(false); // preserve localStorage on error
 
   // game state
   const [role, setRole] = useState(null);           // 'host' | 'guest'
@@ -161,6 +231,9 @@ function OnlineBananagrams() {
   const [dictLoading, setDictLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [savedOnline, setSavedOnline] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [opponentDisconnectedAt, setOpponentDisconnectedAt] = useState(null);
+  const [oppTimeoutElapsed, setOppTimeoutElapsed] = useState(false);
 
   // refs for use inside WS callbacks (avoid stale closures)
   const wsRef       = useRef(null);
@@ -182,12 +255,16 @@ function OnlineBananagrams() {
   useEffect(() => { gridRef.current   = grid;     }, [grid]);
   useEffect(() => { screenRef.current = screen;   }, [screen]);
 
-  // load dictionary
+  // load dictionary — filter single-letter entries (not valid in Bananagrams)
   useEffect(() => {
     fetch(DICTIONARY_URL)
       .then(r => r.text())
       .then(text => {
-        setDictionary(new Set(text.split('\n').map(w => w.trim().toUpperCase()).filter(Boolean)));
+        setDictionary(new Set(
+          text.split('\n')
+            .map(w => w.trim().toUpperCase())
+            .filter(w => w.length >= 2)
+        ));
         setDictLoading(false);
       })
       .catch(() => setDictLoading(false));
@@ -215,6 +292,22 @@ function OnlineBananagrams() {
     clearTimeout(msgTimerRef.current);
     wsRef.current?.close();
   }, []);
+
+  // Escape key deselects current tile
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') setSelected(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Opponent disconnection timeout — after OPPONENT_REJOIN_TIMEOUT_MS show quit option
+  useEffect(() => {
+    if (!opponentDisconnectedAt) { setOppTimeoutElapsed(false); return; }
+    const remaining = OPPONENT_REJOIN_TIMEOUT_MS - (Date.now() - opponentDisconnectedAt);
+    if (remaining <= 0) { setOppTimeoutElapsed(true); return; }
+    const id = setTimeout(() => setOppTimeoutElapsed(true), remaining);
+    return () => clearTimeout(id);
+  }, [opponentDisconnectedAt]);
 
   // send status updates to opponent every 3 s while playing
   useEffect(() => {
@@ -277,6 +370,8 @@ function OnlineBananagrams() {
         setOpponent({ handSize: 21, wordCount: 0 });
         setMessage('');
         setBunchSize(data.bunchSize);
+        setOpponentDisconnectedAt(null);
+        setOppTimeoutElapsed(false);
         prevPeelWordsRef.current = new Set();
         pendingTauntRef.current = null;
         setScreen('playing');
@@ -322,10 +417,14 @@ function OnlineBananagrams() {
         break;
 
       case 'OPPONENT_DISCONNECTED':
-        showMsg('⏳ Opponent disconnected — game paused. Waiting for them to rejoin…', 0);
+        setOpponentDisconnectedAt(Date.now());
+        setOppTimeoutElapsed(false);
+        setMessage('');
         break;
 
       case 'OPPONENT_RECONNECTED':
+        setOpponentDisconnectedAt(null);
+        setOppTimeoutElapsed(false);
         showMsg('✅ Opponent reconnected! Game resumes.', 3000);
         break;
 
@@ -349,6 +448,8 @@ function OnlineBananagrams() {
         setGameResult(null);
         setOpponent({ handSize: 0, wordCount: 0 });
         setMessage('');
+        setOpponentDisconnectedAt(null);
+        setOppTimeoutElapsed(false);
         prevPeelWordsRef.current = new Set();
         pendingTauntRef.current = null;
         setScreen('playing');
@@ -362,6 +463,9 @@ function OnlineBananagrams() {
 
       case 'ERROR':
         setConnError(data.message || 'An error occurred.');
+        // If we had a saved game, allow the user to go back to menu without losing the
+        // localStorage state so they can retry the rejoin.
+        setErrorAllowRetry(!!loadOnlineState());
         setScreen('error');
         break;
 
@@ -379,14 +483,18 @@ function OnlineBananagrams() {
 
     ws.onopen    = onOpen;
     ws.onmessage = onMessage;
-    ws.onerror   = () => { setConnError('Could not reach the game server. Check your connection and try again.'); setScreen('error'); };
+    ws.onerror   = () => {
+      setErrorAllowRetry(false);
+      setConnError('Could not reach the game server. Check your connection and try again.');
+      setScreen('error');
+    };
     ws.onclose   = () => {
       clearInterval(pingRef.current);
       const s = screenRef.current;
       if (s === 'playing' || s === 'waiting') {
         setScreen('menu');
       } else if (s === 'connecting') {
-        // WS closed before we got a response — surface an error rather than hanging
+        setErrorAllowRetry(false);
         setConnError('Connection closed before the game could start. Check your connection and try again.');
         setScreen('error');
       }
@@ -407,10 +515,10 @@ function OnlineBananagrams() {
     openWS(() => wsSend({ action: 'joinRoom', roomCode: code }));
   };
 
-  const resetToMenu = () => {
+  const resetToMenu = (keepSavedState = false) => {
     clearInterval(timerRef.current);
     clearInterval(pingRef.current);
-    clearOnlineState();
+    if (!keepSavedState) clearOnlineState();
     wsRef.current?.close();
     wsRef.current = null;
     setScreen('menu');
@@ -423,6 +531,9 @@ function OnlineBananagrams() {
     setSelected(null);
     setMessage('');
     setTimer(0);
+    setOpponentDisconnectedAt(null);
+    setOppTimeoutElapsed(false);
+    setErrorAllowRetry(false);
   };
 
   const rejoinSavedGame = () => {
@@ -433,12 +544,10 @@ function OnlineBananagrams() {
     roomRef.current = rc;
     setScreen('connecting');
     openWS(() => wsSend({ action: 'rejoinRoom', roomCode: rc, role: r }));
-    // If the server doesn't reply within 8 s (e.g. backend not yet redeployed),
-    // stop waiting and show a clear error instead of hanging on 'connecting'.
     setTimeout(() => {
       if (screenRef.current !== 'connecting') return;
       wsRef.current?.close();
-      clearOnlineState();
+      setErrorAllowRetry(true);
       setConnError('No response from the server — the session may have expired. Start a new game.');
       setScreen('error');
     }, 8000);
@@ -448,13 +557,38 @@ function OnlineBananagrams() {
 
   const handlePeel = () => {
     if (hand.length > 0) { showMsg('Place all your tiles before peeling!'); return; }
+
+    const tileCount = grid.flat().filter(Boolean).length;
+    if (tileCount === 0) { showMsg('Place some tiles on the board first!'); return; }
+
+    if (!isBoardConnected(grid)) {
+      showMsg('All tiles must form one connected crossword — no isolated groups!');
+      return;
+    }
+
     if (dictionary) {
       const words = getWordsOnGrid(grid);
       if (words.some(w => !dictionary.has(w.word))) {
         showMsg('Fix invalid words before peeling!');
         return;
       }
+      // Every tile on the board must be part of at least one word of length ≥ 2
+      const coveredCells = new Set();
+      for (const { word, row, col, direction } of words) {
+        for (let i = 0; i < word.length; i++) {
+          coveredCells.add(direction === 'h' ? `${row}-${col + i}` : `${row + i}-${col}`);
+        }
+      }
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          if (grid[r][c] && !coveredCells.has(`${r}-${c}`)) {
+            showMsg('Every tile must be part of a word (no lone isolated tiles)!');
+            return;
+          }
+        }
+      }
     }
+
     const twoLetterNow = new Set(
       getWordsOnGrid(grid).filter(w => w.word.length === 2).map(w => w.word)
     );
@@ -468,9 +602,12 @@ function OnlineBananagrams() {
 
   const handleDump = () => {
     if (hand.length === 0) { showMsg('No tiles in hand to dump!'); return; }
-    if (bunchSize < 3)     { showMsg('Not enough tiles in the bunch!'); return; }
-    // Prefer the selected hand tile; fall back to the last tile in hand
-    const tile = selected?.source?.type === 'hand' ? selected.tile : hand[hand.length - 1];
+    if (bunchSize < 3) { showMsg(`Not enough tiles in the bunch to dump (need ≥ 3, have ${bunchSize})!`); return; }
+    if (!selected || selected.source.type !== 'hand') {
+      showMsg('Select a tile from your hand first, then press DUMP!');
+      return;
+    }
+    const tile = selected.tile;
     setSelected(null);
     setHand(prev => prev.filter(t => t.id !== tile.id));
     wsSend({ action: 'dump', roomCode: roomRef.current, role: roleRef.current, tile });
@@ -502,6 +639,7 @@ function OnlineBananagrams() {
     setSelected(null);
   };
 
+  // Clicking the hand area (not a specific tile) while a board tile is selected returns it to hand.
   const handleHandAreaTap = () => {
     if (!selected || selected.source.type !== 'grid') return;
     const newGrid = grid.map(r => [...r]);
@@ -509,6 +647,22 @@ function OnlineBananagrams() {
     setGrid(newGrid);
     setHand(prev => [...prev, selected.tile]);
     setSelected(null);
+  };
+
+  // Clicking a hand tile when a board tile is selected returns the board tile to hand,
+  // then selects the clicked hand tile.
+  const handleHandTileTap = (e, tile) => {
+    e.stopPropagation();
+    if (selected?.source?.type === 'grid') {
+      // Return board tile to hand, then select the tapped hand tile
+      const newGrid = grid.map(r => [...r]);
+      newGrid[selected.source.pos.row][selected.source.pos.col] = null;
+      setGrid(newGrid);
+      setHand(prev => [...prev, selected.tile]);
+      setSelected({ tile, source: { type: 'hand', pos: null } });
+    } else {
+      handleTileSelect(tile, 'hand');
+    }
   };
 
   const copyCode = () => {
@@ -604,7 +758,7 @@ function OnlineBananagrams() {
           <p style={{ color: '#795548', fontSize: '0.95rem', fontWeight: '500' }}>
             ⏳ Waiting for Player 2 to join…
           </p>
-          <button onClick={resetToMenu} style={{ marginTop: '20px', background: 'none', border: 'none', color: '#a0856e', cursor: 'pointer', fontSize: '0.85rem', fontFamily: baseFont }}>
+          <button onClick={() => resetToMenu(false)} style={{ marginTop: '20px', background: 'none', border: 'none', color: '#a0856e', cursor: 'pointer', fontSize: '0.85rem', fontFamily: baseFont }}>
             Cancel
           </button>
         </div>
@@ -619,9 +773,23 @@ function OnlineBananagrams() {
           <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⚠️</div>
           <h2 style={{ color: '#5D4037', marginBottom: '12px', fontWeight: '800' }}>Connection Error</h2>
           <p style={{ color: '#795548', marginBottom: '24px', fontSize: '0.95rem' }}>{connError}</p>
-          <button onClick={resetToMenu} style={S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32')}>
-            Back to Menu
-          </button>
+          {errorAllowRetry ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button onClick={rejoinSavedGame} style={S.btn('linear-gradient(145deg, #e67e22, #d35400)', '#a04000')}>
+                Try Rejoining Again
+              </button>
+              <button onClick={() => resetToMenu(false)} style={{ ...S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32'), fontSize: '0.9rem', padding: '10px 24px' }}>
+                Back to Menu
+              </button>
+              <button onClick={() => resetToMenu(true)} style={{ background: 'none', border: 'none', color: '#a0856e', cursor: 'pointer', fontSize: '0.8rem', fontFamily: baseFont }}>
+                Start Fresh (clear saved game)
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => resetToMenu(false)} style={S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32')}>
+              Back to Menu
+            </button>
+          )}
         </div>
       </div>
     );
@@ -640,7 +808,7 @@ function OnlineBananagrams() {
           <p style={{ fontSize: '1.5rem', color: '#5D4037', fontWeight: 'bold', margin: '8px 0 24px' }}>
             {formatTime(timer)}
           </p>
-          <button onClick={resetToMenu} style={S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32')}>
+          <button onClick={() => resetToMenu(true)} style={S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32')}>
             Play Again
           </button>
         </div>
@@ -650,20 +818,77 @@ function OnlineBananagrams() {
 
   // ── Playing screen ─────────────────────────────────────────────────────────
 
-  // Compute which grid cells belong to invalid words so they can be highlighted.
+  // Only highlight invalid words when the hand is empty (Bug 8 — no red flash while placing)
   const gridWords = getWordsOnGrid(grid);
   const invalidWordCells = new Set();
-  if (dictionary) {
-    for (const { word, row, col, direction } of gridWords) {
-      if (!dictionary.has(word)) {
-        for (let i = 0; i < word.length; i++) {
-          invalidWordCells.add(`${direction === 'h' ? row : row + i}-${direction === 'h' ? col + i : col}`);
+  const disconnectedCells = new Set();
+
+  if (hand.length === 0) {
+    if (dictionary) {
+      for (const { word, row, col, direction } of gridWords) {
+        if (!dictionary.has(word)) {
+          for (let i = 0; i < word.length; i++) {
+            invalidWordCells.add(`${direction === 'h' ? row : row + i}-${direction === 'h' ? col + i : col}`);
+          }
+        }
+      }
+    }
+    // Highlight tiles that are disconnected from the main cluster (orange)
+    if (!isBoardConnected(grid)) {
+      // Find the largest connected component
+      const allTiles = [];
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          if (grid[r][c]) allTiles.push([r, c]);
+        }
+      }
+      const remaining = new Set(allTiles.map(([r, c]) => `${r}-${c}`));
+      let largestCluster = null;
+      while (remaining.size > 0) {
+        const [startKey] = remaining;
+        const [sr, sc] = startKey.split('-').map(Number);
+        const cluster = new Set();
+        const q = [[sr, sc]];
+        cluster.add(startKey);
+        remaining.delete(startKey);
+        while (q.length > 0) {
+          const [r, c] = q.shift();
+          for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+            const nk = `${r+dr}-${c+dc}`;
+            if (remaining.has(nk)) {
+              remaining.delete(nk);
+              cluster.add(nk);
+              q.push([r+dr, c+dc]);
+            }
+          }
+        }
+        if (!largestCluster || cluster.size > largestCluster.size) largestCluster = cluster;
+      }
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          if (grid[r][c] && largestCluster && !largestCluster.has(`${r}-${c}`)) {
+            disconnectedCells.add(`${r}-${c}`);
+          }
         }
       }
     }
   }
-  const hasInvalidWords = invalidWordCells.size > 0;
-  const canPeel = hand.length === 0 && !hasInvalidWords;
+
+  const hasInvalidWords  = invalidWordCells.size > 0;
+  const hasDisconnected  = disconnectedCells.size > 0;
+  const boardHasTiles    = grid.flat().some(Boolean);
+  const canPeel = hand.length === 0 && !hasInvalidWords && !hasDisconnected && boardHasTiles && isBoardConnected(grid);
+
+  const boardIsValid = hand.length === 0 && boardHasTiles && !hasInvalidWords && !hasDisconnected;
+
+  let peelBg, peelShadow;
+  if (canPeel) {
+    peelBg = 'linear-gradient(145deg, #4CAF50, #45a049)'; peelShadow = '#2E7D32';
+  } else if (hasInvalidWords || hasDisconnected) {
+    peelBg = 'linear-gradient(145deg, #e74c3c, #c0392b)'; peelShadow = '#922b21';
+  } else {
+    peelBg = 'linear-gradient(145deg, #555, #444)'; peelShadow = '#333';
+  }
 
   return (
     <div style={{
@@ -675,7 +900,42 @@ function OnlineBananagrams() {
       overflow: 'hidden',
     }}>
 
-      {/* Top bar: opponent stats + PEEL + DUMP merged into one row */}
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
+
+      {/* Opponent disconnected overlay */}
+      {opponentDisconnectedAt && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 150,
+          background: 'rgba(0,0,0,0.65)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px',
+        }}>
+          <div style={{
+            background: 'linear-gradient(145deg, #FFE135, #F4D03F)',
+            borderRadius: '20px', padding: '32px 28px',
+            maxWidth: '340px', width: '100%', textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⏳</div>
+            <h3 style={{ color: '#5D4037', fontWeight: '800', marginBottom: '10px', fontSize: '1.2rem' }}>
+              Opponent Disconnected
+            </h3>
+            <p style={{ color: '#795548', fontSize: '0.9rem', marginBottom: '20px' }}>
+              {oppTimeoutElapsed
+                ? "They've been gone a while. You can wait or quit to the menu."
+                : 'Game paused. Waiting for them to rejoin…'}
+            </p>
+            <button
+              onClick={() => resetToMenu(true)}
+              style={S.btn('linear-gradient(145deg, #e74c3c, #c0392b)', '#922b21')}
+            >
+              Quit to Menu
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Top bar: opponent stats + PEEL + DUMP + Help */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '8px',
         background: 'rgba(255,255,255,0.08)', borderRadius: '10px',
@@ -684,16 +944,11 @@ function OnlineBananagrams() {
         <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Opp</span>
         <Pip label="hand"  value={opponent.handSize}  color="#e67e22" />
         <Pip label="bunch" value={bunchSize}           color="#4a90d9" />
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button onClick={handlePeel} style={{
             border: 'none', borderRadius: '8px', padding: '6px 14px',
             fontSize: '0.82rem', color: 'white', cursor: 'pointer', fontFamily: baseFont, fontWeight: '700',
-            background: canPeel
-              ? 'linear-gradient(145deg, #4CAF50, #45a049)'
-              : hasInvalidWords
-                ? 'linear-gradient(145deg, #e74c3c, #c0392b)'
-                : 'linear-gradient(145deg, #555, #444)',
-            boxShadow: canPeel ? '0 3px 0 #2E7D32' : hasInvalidWords ? '0 3px 0 #922b21' : '0 3px 0 #333',
+            background: peelBg, boxShadow: `0 3px 0 ${peelShadow}`,
             touchAction: 'manipulation',
           }}>🍌 PEEL</button>
           <button onClick={handleDump} style={{
@@ -702,6 +957,15 @@ function OnlineBananagrams() {
             background: 'linear-gradient(145deg, #e67e22, #d35400)',
             boxShadow: '0 3px 0 #a04000', touchAction: 'manipulation',
           }}>🔄 DUMP</button>
+          <button
+            onClick={() => setShowHelp(true)}
+            title="How to Play"
+            style={{
+              border: 'none', borderRadius: '8px', padding: '6px 10px',
+              fontSize: '0.82rem', color: 'white', cursor: 'pointer', fontFamily: baseFont, fontWeight: '700',
+              background: 'linear-gradient(145deg, #4a90d9, #2471a3)',
+              boxShadow: '0 3px 0 #1a5276', touchAction: 'manipulation',
+            }}>?</button>
         </div>
       </div>
 
@@ -731,9 +995,11 @@ function OnlineBananagrams() {
             row.map((cell, colIdx) => {
               const isCellSel = selected?.source?.type === 'grid' &&
                 selected.source.pos.row === rowIdx && selected.source.pos.col === colIdx;
-              const isCellInvalid = cell && invalidWordCells.has(`${rowIdx}-${colIdx}`);
+              const cellKey = `${rowIdx}-${colIdx}`;
+              const isCellInvalid = cell && invalidWordCells.has(cellKey);
+              const isCellDisconnected = cell && disconnectedCells.has(cellKey);
               return (
-                <div key={`${rowIdx}-${colIdx}`} onClick={() => handleGridCellTap(rowIdx, colIdx)} style={{
+                <div key={cellKey} onClick={() => handleGridCellTap(rowIdx, colIdx)} style={{
                   width: '34px', height: '34px', borderRadius: '4px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer', touchAction: 'manipulation',
@@ -743,10 +1009,18 @@ function OnlineBananagrams() {
                       ? 'linear-gradient(145deg, #4CAF50, #45a049)'
                       : isCellInvalid
                         ? 'linear-gradient(145deg, #e74c3c, #c0392b)'
-                        : 'linear-gradient(145deg, #FFE135, #F4D03F)',
+                        : isCellDisconnected
+                          ? 'linear-gradient(145deg, #e67e22, #d35400)'
+                          : 'linear-gradient(145deg, #FFE135, #F4D03F)',
                     fontSize: '1rem', fontWeight: '700',
-                    color: (isCellSel || isCellInvalid) ? 'white' : '#5D4037',
-                    boxShadow: isCellSel ? '0 2px 0 #2E7D32' : isCellInvalid ? '0 2px 0 #922b21' : '0 2px 0 #D4AC0D',
+                    color: (isCellSel || isCellInvalid || isCellDisconnected) ? 'white' : '#5D4037',
+                    boxShadow: isCellSel
+                      ? '0 2px 0 #2E7D32'
+                      : isCellInvalid
+                        ? '0 2px 0 #922b21'
+                        : isCellDisconnected
+                          ? '0 2px 0 #a04000'
+                          : '0 2px 0 #D4AC0D',
                   } : {
                     background: selected?.tile ? 'rgba(76,175,80,0.18)' : 'rgba(255,255,255,0.05)',
                   }),
@@ -759,7 +1033,7 @@ function OnlineBananagrams() {
         </div>
       </div>
 
-      {/* Hand — moved below the grid */}
+      {/* Hand — tap empty area to return a board tile; tap a hand tile to select/deselect */}
       <div
         onClick={handleHandAreaTap}
         style={{
@@ -768,14 +1042,17 @@ function OnlineBananagrams() {
           border: selected?.source?.type === 'grid' ? '2px dashed rgba(76,175,80,0.5)' : '2px solid transparent',
         }}
       >
-        <div style={{ color: 'rgba(255,255,255,0.35)', marginBottom: '5px', fontSize: '0.68rem', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          Your Hand ({hand.length})
+        <div style={{ color: 'rgba(255,255,255,0.35)', marginBottom: '5px', fontSize: '0.68rem', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', gap: '8px' }}>
+          <span>Your Hand ({hand.length})</span>
+          {selected?.source?.type === 'grid' && (
+            <span style={{ color: 'rgba(76,175,80,0.8)', fontStyle: 'italic' }}>← tap here to return tile to hand</span>
+          )}
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
           {hand.map(tile => {
             const sel = selected?.tile?.id === tile.id && selected?.source?.type === 'hand';
             return (
-              <div key={tile.id} onClick={(e) => { e.stopPropagation(); handleTileSelect(tile, 'hand'); }} style={{
+              <div key={tile.id} onClick={(e) => handleHandTileTap(e, tile)} style={{
                 width: '40px', height: '40px', borderRadius: '8px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '1.2rem', fontWeight: '700', cursor: 'pointer',
@@ -807,7 +1084,7 @@ function OnlineBananagrams() {
         <span style={{ background: 'rgba(93,64,55,0.15)', padding: '4px 10px', borderRadius: '6px', color: '#5D4037', fontWeight: '600', fontSize: '0.8rem' }}>
           Room: {roomCode}
         </span>
-        <button onClick={resetToMenu} style={{
+        <button onClick={() => resetToMenu(true)} style={{
           marginLeft: 'auto', background: '#e74c3c', border: 'none',
           borderRadius: '6px', padding: '5px 12px', color: 'white',
           cursor: 'pointer', fontFamily: baseFont, fontWeight: '600', fontSize: '0.8rem', touchAction: 'manipulation',
