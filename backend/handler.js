@@ -388,13 +388,15 @@ exports.handler = async (event) => {
 
     // status ──────────────────────────────────────────────────────────────────
     if (action === 'status') {
-      const { roomCode, role, handSize, wordCount } = body;
+      const { roomCode, role, handSize, wordCount, bunchSize } = body;
       const game = await getGame(roomCode);
       if (!game) return { statusCode: 200 };
 
       const opponentConnId = role === 'host' ? game.guestConnectionId : game.hostConnectionId;
       if (opponentConnId) {
-        await send(opponentConnId, { type: 'OPPONENT_STATUS', handSize, wordCount });
+        // Include bunchSize so both players stay in sync even if a DUMP_RESULT
+        // was only delivered to the dumping player.
+        await send(opponentConnId, { type: 'OPPONENT_STATUS', handSize, wordCount, bunchSize });
       }
       return { statusCode: 200 };
     }
