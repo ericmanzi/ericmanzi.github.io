@@ -181,6 +181,10 @@ exports.handler = async (event) => {
         await send(connectionId, { type: 'ERROR', message: 'Room not found. Check the code and try again.' });
         return { statusCode: 200 };
       }
+      if (game.status === 'playing' || game.status === 'paused') {
+        await send(connectionId, { type: 'ERROR', message: 'This game is already in progress.' });
+        return { statusCode: 200 };
+      }
       if (game.status !== 'waiting') {
         await send(connectionId, { type: 'ERROR', message: 'This room is no longer available.' });
         return { statusCode: 200 };
@@ -343,17 +347,17 @@ exports.handler = async (event) => {
         await send(connectionId, { type: 'ERROR', message: 'This game is no longer active.' });
         return { statusCode: 200 };
       }
-      // For paused games, verify the role matches who disconnected
-      if (game.status === 'paused' && game.pausedRole && game.pausedRole !== role) {
-        await send(connectionId, { type: 'ERROR', message: 'You are not the disconnected player for this room.' });
+      // Verify the claimed role actually exists in the game
+      if (role !== 'host' && role !== 'guest') {
+        await send(connectionId, { type: 'ERROR', message: 'Invalid role for this room.' });
         return { statusCode: 200 };
       }
-      // No liveness check for the 'playing' case: the client fires onclose and
-      // immediately reconnects, so $disconnect often hasn't been processed yet and
-      // the old API GW connection still responds to pings. The $disconnect handler
-      // already guards against stale disconnects re-pausing the game (it compares
-      // the active connectionId before pausing), so it's safe to allow the rejoin
-      // unconditionally here.
+      // Both players store their role in localStorage and use it to rejoin. We trust
+      // the localStorage role because: (a) the room code is shared only between the two
+      // players, and (b) each player's role is unique — you can't steal the other slot
+      // because your own localStorage has your own role. The old pausedRole guard was
+      // causing false rejections when both players disconnected and came back, since
+      // $disconnect timing could clear or mismatch the pausedRole field.
 
       const hand = (role === 'host' ? game.hostHand : game.guestHand) || [];
       const opponentConnId = role === 'host' ? game.guestConnectionId : game.hostConnectionId;
