@@ -342,16 +342,51 @@ exports.handler = async (event) => {
         await send(connectionId, { type: 'ERROR', message: 'Room not found. The game may have expired.' });
         return { statusCode: 200 };
       }
-      // Accept paused (normal disconnect) or still-playing (missed $disconnect event)
-      if (game.status !== 'paused' && game.status !== 'playing') {
+
+      // Accept waiting (host navigated away before P2 joined), paused (normal disconnect),
+      // or still-playing (missed $disconnect event)
+      const isWaiting = game.status === 'waiting';
+      if (!isWaiting && game.status !== 'paused' && game.status !== 'playing') {
         await send(connectionId, { type: 'ERROR', message: 'This game is no longer active.' });
         return { statusCode: 200 };
       }
+
+      // Only the host can rejoin a waiting room
+      if (isWaiting && role !== 'host') {
+        await send(connectionId, { type: 'ERROR', message: 'This room is still waiting for a second player to join.' });
+        return { statusCode: 200 };
+      }
+
       // Verify the claimed role actually exists in the game
       if (role !== 'host' && role !== 'guest') {
         await send(connectionId, { type: 'ERROR', message: 'Invalid role for this room.' });
         return { statusCode: 200 };
       }
+
+      // Update connection ID for this role
+      const connIdAttr = role === 'host' ? 'hostConnectionId' : 'guestConnectionId';
+
+      if (isWaiting) {
+        // Just refresh the host's connection ID; leave status as 'waiting' so P2 can still join
+        await dynamo.send(new UpdateItemCommand({
+          TableName: GAMES_TABLE,
+          Key: marshall({ roomCode }),
+          UpdateExpression: `SET ${connIdAttr} = :cid`,
+          ExpressionAttributeValues: marshall({ ':cid': connectionId }),
+        }));
+
+        await dynamo.send(new UpdateItemCommand({
+          TableName: CONNS_TABLE,
+          Key: marshall({ connectionId }),
+          UpdateExpression: 'SET roomCode = :rc, #r = :role',
+          ExpressionAttributeNames: { '#r': 'role' },
+          ExpressionAttributeValues: marshall({ ':rc': roomCode, ':role': role }),
+        }));
+
+        await send(connectionId, { type: 'REJOIN_OK', role, roomCode, gameStatus: 'waiting' });
+        return { statusCode: 200 };
+      }
+
       // Both players store their role in localStorage and use it to rejoin. We trust
       // the localStorage role because: (a) the room code is shared only between the two
       // players, and (b) each player's role is unique — you can't steal the other slot
@@ -361,7 +396,6 @@ exports.handler = async (event) => {
 
       const hand = (role === 'host' ? game.hostHand : game.guestHand) || [];
       const opponentConnId = role === 'host' ? game.guestConnectionId : game.hostConnectionId;
-      const connIdAttr = role === 'host' ? 'hostConnectionId' : 'guestConnectionId';
 
       await dynamo.send(new UpdateItemCommand({
         TableName: GAMES_TABLE,
@@ -382,6 +416,19 @@ exports.handler = async (event) => {
       await send(connectionId, { type: 'REJOIN_OK', hand, bunchSize: game.bunch.length, role, roomCode });
       if (opponentConnId) {
         await send(opponentConnId, { type: 'OPPONENT_RECONNECTED' });
+      }
+      return { statusCode: 200 };
+    }
+
+    // shareBoard ──────────────────────────────────────────────────────────────
+    if (action === 'shareBoard') {
+      const { roomCode, role, grid } = body;
+      const game = await getGame(roomCode);
+      if (!game || game.status !== 'finished') return { statusCode: 200 };
+
+      const opponentConnId = role === 'host' ? game.guestConnectionId : game.hostConnectionId;
+      if (opponentConnId) {
+        await send(opponentConnId, { type: 'OPPONENT_FINAL_BOARD', grid });
       }
       return { statusCode: 200 };
     }

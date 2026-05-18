@@ -3,7 +3,7 @@ const { useState, useEffect, useRef } = React;
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const GRID_SIZE = 25;
-const DICTIONARY_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt';
+const DICTIONARY_URL = 'https://raw.githubusercontent.com/redbo/scrabblewords/master/sowpods.txt';
 const baseFont = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const PING_INTERVAL_MS = 8 * 60 * 1000;
 const ONLINE_STORAGE_KEY = 'bananagrams_online_state';
@@ -297,6 +297,9 @@ function OnlineBananagrams() {
   const [opponentDisconnectedAt, setOpponentDisconnectedAt] = useState(null);
   const [oppTimeoutElapsed, setOppTimeoutElapsed]           = useState(false);
   const [dragOverCell, setDragOverCell] = useState(null); // { row, col }
+  const [myFinalGrid, setMyFinalGrid]         = useState(null);
+  const [opponentFinalGrid, setOpponentFinalGrid] = useState(null);
+  const [boardViewTab, setBoardViewTab]       = useState('mine');
 
   // refs
   const wsRef            = useRef(null);
@@ -430,7 +433,10 @@ function OnlineBananagrams() {
       case 'ROOM_CREATED':
         setRoomCode(data.roomCode);
         roomRef.current = data.roomCode;
+        setRole('host'); roleRef.current = 'host';
         setScreen('waiting');
+        saveOnlineState({ roomCode: data.roomCode, role: 'host' });
+        startPing();
         break;
 
       case 'GAME_START': {
@@ -490,7 +496,15 @@ function OnlineBananagrams() {
         clearInterval(timerRef.current);
         clearInterval(pingRef.current);
         setGameResult({ winner: data.winner === roleRef.current ? 'me' : 'them' });
+        setMyFinalGrid(gridRef.current);
+        setOpponentFinalGrid(null);
+        setBoardViewTab('mine');
         setScreen('won');
+        wsSend({ action: 'shareBoard', roomCode: roomRef.current, role: roleRef.current, grid: gridRef.current });
+        break;
+
+      case 'OPPONENT_FINAL_BOARD':
+        setOpponentFinalGrid(data.grid);
         break;
 
       case 'OPPONENT_DISCONNECTED':
@@ -506,8 +520,17 @@ function OnlineBananagrams() {
 
       case 'REJOIN_OK': {
         setRole(data.role); roleRef.current = data.role;
-        setBunchSize(data.bunchSize); bunchSizeRef.current = data.bunchSize;
         if (data.roomCode) { setRoomCode(data.roomCode); roomRef.current = data.roomCode; }
+
+        if (data.gameStatus === 'waiting') {
+          // Host navigated away before P2 joined — put them back on the waiting screen
+          saveOnlineState({ roomCode: data.roomCode || roomRef.current, role: data.role });
+          setScreen('waiting');
+          startPing();
+          break;
+        }
+
+        setBunchSize(data.bunchSize); bunchSizeRef.current = data.bunchSize;
         const savedState  = loadOnlineState();
         const restoredGrid = savedState?.grid || createEmptyGrid();
         setGrid(restoredGrid); gridRef.current = restoredGrid;
@@ -580,10 +603,12 @@ function OnlineBananagrams() {
     if (!keepSavedState) clearOnlineState();
     wsRef.current?.close(); wsRef.current = null;
     setScreen('menu'); setJoinInput(''); setRoomCode(''); setConnError('');
+    setRole(null); roleRef.current = null;
     setGameResult(null); setHand([]); setGrid(createEmptyGrid());
     setSelected(null); setMessage(''); setTimer(0);
     setOpponentDisconnectedAt(null); setOppTimeoutElapsed(false);
     setErrorAllowRetry(false); setShowMenu(false); setShowHelp(false);
+    setMyFinalGrid(null); setOpponentFinalGrid(null); setBoardViewTab('mine');
   };
 
   const rejoinSavedGame = () => {
@@ -843,8 +868,8 @@ function OnlineBananagrams() {
           {errorAllowRetry ? (
             <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
               <button onClick={rejoinSavedGame} style={S.btn('linear-gradient(145deg, #e67e22, #d35400)', '#a04000')}>Try Rejoining Again</button>
-              <button onClick={() => resetToMenu(false)} style={{ ...S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32'), fontSize:'0.9rem', padding:'10px 24px' }}>Back to Menu</button>
-              <button onClick={() => resetToMenu(true)} style={{ background:'none', border:'none', color:'#a0856e', cursor:'pointer', fontSize:'0.8rem', fontFamily:baseFont }}>Start Fresh (clear saved game)</button>
+              <button onClick={() => resetToMenu(true)} style={{ ...S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32'), fontSize:'0.9rem', padding:'10px 24px' }}>Back to Menu</button>
+              <button onClick={() => resetToMenu(false)} style={{ background:'none', border:'none', color:'#a0856e', cursor:'pointer', fontSize:'0.8rem', fontFamily:baseFont }}>Start Fresh (clear saved game)</button>
             </div>
           ) : (
             <button onClick={() => resetToMenu(false)} style={S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32')}>Back to Menu</button>
@@ -856,13 +881,100 @@ function OnlineBananagrams() {
 
   if (screen === 'won') {
     const iWon = gameResult?.winner === 'me';
+    const viewingGrid   = boardViewTab === 'mine' ? myFinalGrid : opponentFinalGrid;
+    const viewingLabel  = boardViewTab === 'mine' ? (role === 'host' ? 'P1 (you)' : 'P2 (you)') : (role === 'host' ? 'P2' : 'P1');
+
+    // Compute bounding box for board preview
+    let minR = GRID_SIZE, maxR = -1, minC = GRID_SIZE, maxC = -1;
+    if (viewingGrid) {
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          if (viewingGrid[r][c]) {
+            if (r < minR) minR = r; if (r > maxR) maxR = r;
+            if (c < minC) minC = c; if (c > maxC) maxC = c;
+          }
+        }
+      }
+    }
+    const hasBoard = maxR >= 0;
+    const boardRows = hasBoard ? maxR - minR + 1 : 0;
+    const boardCols = hasBoard ? maxC - minC + 1 : 0;
+
+    const tabBtn = (tab, label) => (
+      <button onClick={() => setBoardViewTab(tab)} style={{
+        flex: 1, padding: '8px', borderRadius: '8px', border: 'none',
+        background: boardViewTab === tab ? 'linear-gradient(145deg, #5D4037, #4e342e)' : 'rgba(255,255,255,0.35)',
+        color: boardViewTab === tab ? 'white' : '#5D4037',
+        fontFamily: baseFont, fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer',
+      }}>{label}</button>
+    );
+
     return (
-      <div style={S.page}>
-        <div style={S.card}>
-          <div style={{ fontSize:'3.5rem', marginBottom:'12px' }}>{iWon ? '🎉🍌🏆' : '🍌😔'}</div>
-          <h1 style={{ ...S.title, fontSize:'2.5rem' }}>{iWon ? 'BANANAS!' : 'So close!'}</h1>
-          <p style={{ fontSize:'1.2rem', color:'#795548', margin:'8px 0', fontWeight:'700' }}>{iWon ? 'You won!' : 'Opponent wins this time.'}</p>
-          <p style={{ fontSize:'1.5rem', color:'#5D4037', fontWeight:'bold', margin:'8px 0 24px' }}>{formatTime(timer)}</p>
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'flex-start', fontFamily: baseFont, padding: '20px', overflowY: 'auto',
+      }}>
+        <div style={{ ...S.card, maxWidth: '520px', width: '100%' }}>
+          <div style={{ fontSize:'3rem', marginBottom:'10px' }}>{iWon ? '🎉🍌🏆' : '🍌😔'}</div>
+          <h1 style={{ ...S.title, fontSize:'2.2rem' }}>{iWon ? 'BANANAS!' : 'So close!'}</h1>
+          <p style={{ fontSize:'1.1rem', color:'#795548', margin:'6px 0', fontWeight:'700' }}>{iWon ? 'You won!' : 'Opponent wins this time.'}</p>
+          <p style={{ fontSize:'1.4rem', color:'#5D4037', fontWeight:'bold', margin:'6px 0 16px' }}>{formatTime(timer)}</p>
+
+          {/* Board viewer */}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ display:'flex', gap:'6px', marginBottom:'10px' }}>
+              {tabBtn('mine', `My Board`)}
+              {tabBtn('theirs', `Opponent's Board`)}
+            </div>
+            <p style={{ color:'#795548', fontSize:'0.78rem', fontWeight:'600', marginBottom:'8px', textAlign:'left' }}>
+              {viewingLabel}
+            </p>
+            {boardViewTab === 'theirs' && !opponentFinalGrid ? (
+              <div style={{
+                background: 'rgba(255,255,255,0.3)', borderRadius: '10px', padding: '20px',
+                color: '#795548', fontSize: '0.9rem', fontWeight: '600', textAlign: 'center',
+              }}>
+                ⏳ Waiting for opponent's board…
+              </div>
+            ) : !hasBoard ? (
+              <div style={{
+                background: 'rgba(255,255,255,0.3)', borderRadius: '10px', padding: '16px',
+                color: '#795548', fontSize: '0.9rem', textAlign: 'center',
+              }}>
+                Empty board
+              </div>
+            ) : (
+              <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'45vh', borderRadius:'8px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${boardCols}, 28px)`,
+                  gap: '2px', background: '#2c3e50', padding: '6px',
+                  borderRadius: '8px', width: 'fit-content',
+                }}>
+                  {Array.from({ length: boardRows * boardCols }, (_, i) => {
+                    const ri = Math.floor(i / boardCols);
+                    const ci = i % boardCols;
+                    const tile = viewingGrid[minR + ri][minC + ci];
+                    return (
+                      <div key={`${ri}-${ci}`} style={{
+                        width: '28px', height: '28px', borderRadius: '4px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.82rem', fontWeight: '700',
+                        background: tile ? 'linear-gradient(145deg, #66bb6a, #43a047)' : 'rgba(255,255,255,0.05)',
+                        color: tile ? 'white' : 'transparent',
+                        userSelect: 'none',
+                      }}>
+                        {tile?.letter}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button onClick={() => resetToMenu(false)} style={S.btn('linear-gradient(145deg, #4CAF50, #45a049)', '#2E7D32')}>Play Again</button>
         </div>
       </div>
