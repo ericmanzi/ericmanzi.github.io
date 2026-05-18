@@ -648,13 +648,102 @@ describe('rejoinRoom', () => {
     expect(ok.hand).toEqual(HOST_HAND);
   });
 
-  test('sends ERROR when the rejoining role does not match the disconnected role', async () => {
-    ddbMock.on(GetItemCommand).resolves({ Item: pausedGame({ pausedRole: 'guest' }) });
+  test('allows host to rejoin even when pausedRole is guest (both players can always rejoin their own slot)', async () => {
+    // pausedRole is no longer a gate — both players can rejoin their own slot at any time.
+    // This prevents false rejections when both disconnect and come back in an unexpected order.
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: pausedGame({ pausedRole: 'guest' }) })
+      .on(UpdateItemCommand).resolves({});
 
     await handler(event('$default', 'new-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
 
-    expect(msgsTo('new-conn')[0].type).toBe('ERROR');
-    expect(msgsTo('new-conn')[0].message).toMatch(/not the disconnected player/i);
+    const ok = msgsTo('new-conn').find(m => m.type === 'REJOIN_OK');
+    expect(ok).toBeDefined();
+    expect(ok.role).toBe('host');
+  });
+
+  test('allows host to rejoin a waiting room (navigated away before P2 joined)', async () => {
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: marshalGame({ status: 'waiting', hostConnectionId: 'old-host-conn' }) })
+      .on(UpdateItemCommand).resolves({});
+
+    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    const ok = msgsTo('new-host-conn').find(m => m.type === 'REJOIN_OK');
+    expect(ok).toBeDefined();
+    expect(ok.gameStatus).toBe('waiting');
+    expect(ok.role).toBe('host');
+    expect(ok.roomCode).toBe('ROOM01');
+  });
+
+  test('rejects guest trying to rejoin a waiting room', async () => {
+    ddbMock.on(GetItemCommand).resolves({ Item: marshalGame({ status: 'waiting' }) });
+
+    await handler(event('$default', 'new-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'guest' }));
+
+    const err = msgsTo('new-conn').find(m => m.type === 'ERROR');
+    expect(err).toBeDefined();
+    expect(err.message).toMatch(/waiting/i);
+  });
+
+  test('leaves game status as waiting when host rejoins a waiting room', async () => {
+    ddbMock
+      .on(GetItemCommand).resolves({ Item: marshalGame({ status: 'waiting', hostConnectionId: 'old-host-conn' }) })
+      .on(UpdateItemCommand).resolves({});
+
+    await handler(event('$default', 'new-host-conn', { action: 'rejoinRoom', roomCode: 'ROOM01', role: 'host' }));
+
+    const updates = ddbMock.commandCalls(UpdateItemCommand);
+    // Should NOT set status to 'playing'
+    const promotesGame = updates.some(u => {
+      const vals = u.args[0].input.ExpressionAttributeValues;
+      return vals?.[':s']?.S === 'playing';
+    });
+    expect(promotesGame).toBe(false);
+    // Should update hostConnectionId
+    const updatesConnId = updates.some(u => {
+      const vals = u.args[0].input.ExpressionAttributeValues;
+      return vals?.[':cid']?.S === 'new-host-conn';
+    });
+    expect(updatesConnId).toBe(true);
+  });
+});
+
+// ── shareBoard ────────────────────────────────────────────────────────────────
+
+describe('shareBoard', () => {
+  const FINISHED_GAME = marshalGame({
+    status: 'finished',
+    hostConnectionId: 'host-conn',
+    guestConnectionId: 'guest-conn',
+  });
+
+  test('relays grid to opponent when game is finished', async () => {
+    ddbMock.on(GetItemCommand).resolves({ Item: FINISHED_GAME });
+
+    const testGrid = [[{ id: 1, letter: 'A' }]];
+    await handler(event('$default', 'host-conn', { action: 'shareBoard', roomCode: 'ROOM01', role: 'host', grid: testGrid }));
+
+    const msgs = msgsTo('guest-conn');
+    const boardMsg = msgs.find(m => m.type === 'OPPONENT_FINAL_BOARD');
+    expect(boardMsg).toBeDefined();
+    expect(boardMsg.grid).toEqual(testGrid);
+  });
+
+  test('does nothing when game is not finished', async () => {
+    ddbMock.on(GetItemCommand).resolves({ Item: marshalGame({ status: 'playing' }) });
+
+    await handler(event('$default', 'host-conn', { action: 'shareBoard', roomCode: 'ROOM01', role: 'host', grid: [] }));
+
+    expect(apigwMock.commandCalls(PostToConnectionCommand)).toHaveLength(0);
+  });
+
+  test('does nothing when game is not found', async () => {
+    ddbMock.on(GetItemCommand).resolves({ Item: undefined });
+
+    await handler(event('$default', 'host-conn', { action: 'shareBoard', roomCode: 'BADROOM', role: 'host', grid: [] }));
+
+    expect(apigwMock.commandCalls(PostToConnectionCommand)).toHaveLength(0);
   });
 });
 
