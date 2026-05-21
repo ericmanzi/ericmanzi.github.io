@@ -3,7 +3,7 @@ const { useState, useEffect, useRef } = React;
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const GRID_SIZE = 25;
-const DICTIONARY_URL = 'https://raw.githubusercontent.com/redbo/scrabblewords/master/sowpods.txt';
+const DICTIONARY_URL = 'https://raw.githubusercontent.com/jesstess/Scrabble/master/scrabble/sowpods.txt';
 const baseFont = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 const PING_INTERVAL_MS = 8 * 60 * 1000;
 const ONLINE_STORAGE_KEY = 'bananagrams_online_state';
@@ -327,7 +327,10 @@ function OnlineBananagrams() {
   // load dictionary — exclude single-letter entries
   useEffect(() => {
     fetch(DICTIONARY_URL)
-      .then(r => r.text())
+      .then(r => {
+        if (!r.ok) throw new Error(`Dictionary fetch failed: ${r.status}`);
+        return r.text();
+      })
       .then(text => {
         setDictionary(new Set(
           text.split('\n').map(w => w.trim().toUpperCase()).filter(w => w.length >= 2)
