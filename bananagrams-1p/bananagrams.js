@@ -457,7 +457,7 @@ function Bananagrams() {
           </p>
 
           <div style={{ display: 'flex', gap: '8px', marginBottom: '18px', justifyContent: 'center' }}>
-            <a href="../bananagrams-online/index.html" style={{
+            <a href="../bananagrams/index.html" style={{
               background: 'rgba(255,255,255,0.45)',
               color: '#5D4037', fontSize: '0.85rem', fontWeight: '600',
               padding: '8px 14px', borderRadius: '8px', textDecoration: 'none',
