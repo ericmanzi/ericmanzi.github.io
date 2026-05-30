@@ -825,7 +825,7 @@ function OnlineBananagrams() {
             • First to empty hand when bunch &lt; 2 tiles wins <strong>BANANAS!</strong>
           </div>
           <div style={{ marginTop:'16px', display:'flex', gap:'12px', justifyContent:'center' }}>
-            <a href="../bananagrams/index.html" style={{ color:'#795548', fontSize:'0.85rem' }}>Single Player →</a>
+            <a href="../bananagrams-1p/index.html" style={{ color:'#795548', fontSize:'0.85rem' }}>Single Player →</a>
           </div>
         </div>
       </div>
@@ -1094,29 +1094,6 @@ function OnlineBananagrams() {
         </div>
       )}
 
-      {/* ── Header: PEEL · DUMP · Withdraw · Menu ── */}
-      <div style={{
-        display:'flex', alignItems:'center', gap:'6px',
-        background:'rgba(255,255,255,0.08)', borderRadius:'10px',
-        padding:'7px 12px', flexShrink:0,
-      }}>
-        <button onClick={handlePeel} style={{ ...hdrBtn(peelBg, peelShadow) }}>🍌 PEEL</button>
-        <button onClick={handleDump} style={{ ...hdrBtn('linear-gradient(145deg, #e67e22, #d35400)', '#a04000') }}>🔄 DUMP</button>
-        <button
-          onClick={handleWithdraw}
-          title="Return selected tile to hand"
-          style={{ ...hdrBtn(
-            selected?.source?.type === 'grid'
-              ? 'linear-gradient(145deg, #4CAF50, #45a049)'
-              : 'linear-gradient(145deg, #555, #444)',
-            selected?.source?.type === 'grid' ? '#2E7D32' : '#333'
-          ) }}
-        >↩ Withdraw</button>
-        <div style={{ marginLeft:'auto' }}>
-          <button onClick={() => setShowMenu(true)} style={{ ...hdrBtn('linear-gradient(145deg, #7b68ee, #6a58d4)', '#4a3aaa') }}>☰ Menu</button>
-        </div>
-      </div>
-
       {/* Toast message */}
       {message && (
         <div style={{
@@ -1228,6 +1205,29 @@ function OnlineBananagrams() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* ── Action bar: PEEL · DUMP · Withdraw · Menu ── */}
+      <div style={{
+        display:'flex', alignItems:'center', gap:'6px',
+        background:'rgba(255,255,255,0.08)', borderRadius:'10px',
+        padding:'7px 12px', flexShrink:0,
+      }}>
+        <button onClick={handlePeel} style={{ ...hdrBtn(peelBg, peelShadow) }}>🍌 PEEL</button>
+        <button onClick={handleDump} style={{ ...hdrBtn('linear-gradient(145deg, #e67e22, #d35400)', '#a04000') }}>🔄 DUMP</button>
+        <button
+          onClick={handleWithdraw}
+          title="Return selected tile to hand"
+          style={{ ...hdrBtn(
+            selected?.source?.type === 'grid'
+              ? 'linear-gradient(145deg, #4CAF50, #45a049)'
+              : 'linear-gradient(145deg, #555, #444)',
+            selected?.source?.type === 'grid' ? '#2E7D32' : '#333'
+          ) }}
+        >↩ Withdraw</button>
+        <div style={{ marginLeft:'auto' }}>
+          <button onClick={() => setShowMenu(true)} style={{ ...hdrBtn('linear-gradient(145deg, #7b68ee, #6a58d4)', '#4a3aaa') }}>☰ Menu</button>
         </div>
       </div>
 
