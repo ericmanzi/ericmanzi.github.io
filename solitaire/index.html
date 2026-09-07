@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="Eric Manzi">
+    <meta name="description" content="Word Solitaire — a card game where you clear the tableau by matching words to their category. Plays entirely in your browser.">
+    <title>Word Solitaire</title>
+    <style>
+        :root {
+            --felt: #2f8b57;
+            --felt-dark: #256f46;
+            --felt-deep: #1d5936;
+            --card: #fbf6ea;
+            --card-edge: #e7dcc4;
+            --ink: #5b4636;
+            --ink-soft: #8a7561;
+            --gold: #f2c14e;
+            --gold-dark: #d99f26;
+            --blue: #6d8ee8;
+            --blue-dark: #4b68c9;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+        body {
+            font-family: 'Rubik', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--felt);
+            background-image:
+                radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.12), transparent 60%),
+                linear-gradient(180deg, var(--felt) 0%, var(--felt-dark) 55%, var(--felt-deep) 100%);
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        a { color: inherit; }
+
+        .wrap {
+            width: 100%;
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* ---------- top bar ---------- */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 18px 0 6px;
+        }
+
+        .coin-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.32);
+            border-radius: 999px;
+            padding: 6px 18px 6px 6px;
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: 0.5px;
+        }
+
+        .coin {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 30%, #ffe08a, var(--gold) 55%, var(--gold-dark));
+            border: 2px solid #fff;
+            display: grid;
+            place-items: center;
+            font-size: 15px;
+            color: #8a5f10;
+        }
+
+        .home-link {
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.85);
+            background: rgba(0, 0, 0, 0.22);
+            border-radius: 999px;
+            padding: 8px 16px;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+
+        .home-link:hover { background: rgba(0, 0, 0, 0.36); color: #fff; }
+
+        /* ---------- hero ---------- */
+        .hero {
+            text-align: center;
+            padding: 26px 0 8px;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.6rem, 9vw, 4.4rem);
+            font-weight: 800;
+            line-height: 1.02;
+            letter-spacing: -1px;
+            text-shadow: 0 3px 0 rgba(0, 0, 0, 0.18);
+        }
+
+        .hero h1 span { color: var(--gold); }
+
+        .tagline {
+            margin: 16px auto 0;
+            max-width: 520px;
+            font-size: clamp(1rem, 2.6vw, 1.15rem);
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        /* ---------- card fan ---------- */
+        .fan {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 0;
+            margin: 34px 0 30px;
+            min-height: 190px;
+        }
+
+        .card {
+            width: 108px;
+            height: 152px;
+            border-radius: 12px;
+            background: var(--card);
+            border: 2px solid var(--card-edge);
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            color: var(--ink);
+            font-size: 19px;
+            font-weight: 600;
+            text-align: center;
+            position: relative;
+            transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.3, 1.2), box-shadow 0.25s ease;
+        }
+
+        .card::after {
+            content: "";
+            position: absolute;
+            inset: 6px;
+            border: 1px solid rgba(200, 180, 140, 0.5);
+            border-radius: 7px;
+        }
+
+        .card:nth-child(1) { transform: rotate(-9deg) translateY(10px); }
+        .card:nth-child(2) { transform: rotate(-4deg) translateY(0); }
+        .card:nth-child(3) { transform: rotate(0deg) translateY(-8px); z-index: 2; }
+        .card:nth-child(4) { transform: rotate(4deg) translateY(0); }
+        .card:nth-child(5) { transform: rotate(9deg) translateY(10px); }
+
+        .fan .card + .card { margin-left: 10px; }
+
+        .card:hover { transform: translateY(-22px) rotate(0deg) scale(1.04); z-index: 5; box-shadow: 0 16px 26px rgba(0, 0, 0, 0.3); }
+
+        .card.crowned { border-color: var(--gold); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25), 0 0 0 2px rgba(242, 193, 78, 0.35); }
+
+        .card .tag {
+            position: absolute;
+            top: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--gold);
+            color: #7a5310;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            padding: 3px 10px;
+            border-radius: 6px 6px 0 0;
+            white-space: nowrap;
+        }
+
+        .card .count {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--ink-soft);
+        }
+
+        .card.facedown {
+            background:
+                repeating-linear-gradient(45deg, #6f9ff0 0 10px, #5b8ae6 10px 20px);
+            border-color: #fff;
+        }
+
+        .card.facedown::after { border-color: rgba(255, 255, 255, 0.45); }
+
+        /* ---------- play button ---------- */
+        .cta {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 8px;
+        }
+
+        .play-btn {
+            appearance: none;
+            border: none;
+            font: inherit;
+            cursor: not-allowed;
+            background: linear-gradient(180deg, #ffd873, var(--gold) 60%, var(--gold-dark));
+            color: #6b4a08;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            padding: 16px 54px;
+            border-radius: 16px;
+            box-shadow: 0 6px 0 #b8850f, 0 12px 22px rgba(0, 0, 0, 0.28);
+            opacity: 0.92;
+        }
+
+        .cta-note {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        /* ---------- stat strip ---------- */
+        .stats {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin: 36px 0 10px;
+        }
+
+        .stat {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 14px;
+            padding: 14px 22px;
+            text-align: center;
+            min-width: 130px;
+        }
+
+        .stat .value {
+            font-size: 26px;
+            font-weight: 800;
+            color: var(--gold);
+        }
+
+        .stat .label {
+            font-size: 12px;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 2px;
+        }
+
+        /* ---------- sections ---------- */
+        section { padding: 34px 0; }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 22px;
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 16px;
+        }
+
+        .step {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .step .num {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--blue);
+            border: 2px solid #fff;
+            display: grid;
+            place-items: center;
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .step h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .step p {
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: rgba(255, 255, 255, 0.82);
+        }
+
+        /* ---------- tool row ---------- */
+        .tools {
+            display: flex;
+            justify-content: center;
+            gap: 28px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+
+        .tool { text-align: center; width: 96px; }
+
+        .tool .icon {
+            width: 68px;
+            height: 68px;
+            margin: 0 auto 8px;
+            border-radius: 18px;
+            display: grid;
+            place-items: center;
+            font-size: 28px;
+            background: linear-gradient(180deg, #8aa7ee, var(--blue) 60%, var(--blue-dark));
+            border: 3px solid #fff;
+            box-shadow: 0 5px 0 rgba(0, 0, 0, 0.18);
+        }
+
+        .tool.gold .icon {
+            background: linear-gradient(180deg, #ffd873, var(--gold) 60%, var(--gold-dark));
+        }
+
+        .tool .name { font-size: 13px; font-weight: 600; }
+
+        .tool .cost {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 2px;
+        }
+
+        footer {
+            margin-top: auto;
+            padding: 30px 0 34px;
+            text-align: center;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.65);
+        }
+
+        footer a { text-decoration: underline; }
+
+        @media (max-width: 560px) {
+            .card { width: 84px; height: 120px; font-size: 15px; }
+            .fan .card + .card { margin-left: 4px; }
+            .fan { min-height: 150px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="wrap">
+        <div class="topbar">
+            <div class="coin-chip">
+                <span class="coin">&#9819;</span>
+                <span>2303</span>
+            </div>
+            <a class="home-link" href="/">&larr; ericmanzi.github.io</a>
+        </div>
+
+        <header class="hero">
+            <h1>Word <span>Solitaire</span></h1>
+            <p class="tagline">
+                Classic solitaire pacing, played with words instead of suits.
+                Deal the tableau, read the clue on each foundation, and send every
+                card home before you run out of moves.
+            </p>
+        </header>
+
+        <div class="fan">
+            <div class="card facedown"></div>
+            <div class="card"><span class="count">2/3</span><span class="tag">Greece</span>Kappa</div>
+            <div class="card crowned"><span class="count">0/3</span>Dynamics</div>
+            <div class="card"><span class="count">1/6</span><span class="tag">Robot</span>Robovac</div>
+            <div class="card facedown"></div>
+        </div>
+
+        <div class="cta">
+            <button class="play-btn" type="button" disabled>Play</button>
+            <p class="cta-note">Coming soon — the board is still being dealt.</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat"><div class="value">107</div><div class="label">Moves</div></div>
+            <div class="stat"><div class="value">32</div><div class="label">Stock</div></div>
+            <div class="stat"><div class="value">4</div><div class="label">Foundations</div></div>
+            <div class="stat"><div class="value">0</div><div class="label">Servers</div></div>
+        </div>
+
+        <section>
+            <h2>How it plays</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="num">1</div>
+                    <h3>Read the foundation</h3>
+                    <p>Each foundation card shows a category — Greece, Robot, Chicago — and how many words it still needs.</p>
+                </div>
+                <div class="step">
+                    <div class="num">2</div>
+                    <h3>Send words home</h3>
+                    <p>Tap a face-up word in the tableau to move it onto the foundation it belongs to. Flip whatever it was covering.</p>
+                </div>
+                <div class="step">
+                    <div class="num">3</div>
+                    <h3>Work the stock</h3>
+                    <p>Stuck? Draw from the stock for new words. Every draw and every placement costs one of your moves.</p>
+                </div>
+                <div class="step">
+                    <div class="num">4</div>
+                    <h3>Clear the board</h3>
+                    <p>Fill every foundation before the move counter hits zero. Crowned foundations pay out bonus coins.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Spend your coins</h2>
+            <div class="tools">
+                <div class="tool">
+                    <div class="icon">&#128161;</div>
+                    <div class="name">Hint</div>
+                    <div class="cost">&#9819; 1100</div>
+                </div>
+                <div class="tool">
+                    <div class="icon">&#8630;</div>
+                    <div class="name">Undo</div>
+                    <div class="cost">&#9819; 600</div>
+                </div>
+                <div class="tool gold">
+                    <div class="icon">&#127183;</div>
+                    <div class="name">Redeal</div>
+                    <div class="cost">&#9819; 2250</div>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            No accounts, no servers — the whole game runs in your browser and your
+            progress is kept on this device.
+            <br>
+            Built by <a href="/">Eric Manzi</a>.
+        </footer>
+    </div>
+
+</body>
+</html>
