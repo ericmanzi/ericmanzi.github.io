@@ -11,6 +11,7 @@
 (function () {
     'use strict';
 
+    var LIMITS = { hint: 3, undo: 5, wild: 1 };   // per level, refilled on a new deal
     var ROW_SLOTS = 3;          // the row the deck deals into
     var SLOTS = 4;              // foundation slots
     var COLUMNS = 4;            // tableau columns
@@ -371,6 +372,7 @@
             moveLimit: deal.moveLimit,
             solution: deal.solution,
             history: [],
+            tools: { hint: LIMITS.hint, undo: LIMITS.undo, wild: LIMITS.wild },
             wild: false,
             over: null
         };
@@ -410,7 +412,7 @@
     }
 
     function pickable(zone, index) {
-        if (zone === 'tableau') return topRun(state.tableau[index]);
+        if (zone === 'tableau') return state.tableau[index] ? topRun(state.tableau[index]) : [];
         if (zone === 'row') return state.row[index] ? [state.row[index]] : [];
         return [];
     }
@@ -436,8 +438,10 @@
 
     function canDrop(cards, to, wild) {
         if (!cards.length) return false;
-        if (to.zone === 'foundation') return canPlaceOnFoundation(cards, to.index);
-        if (to.zone === 'tableau') return canPlaceOnColumn(cards, to.index, wild);
+        if (to.zone === 'foundation') {
+            return to.index < state.foundations.length && canPlaceOnFoundation(cards, to.index);
+        }
+        if (to.zone === 'tableau') return state.tableau[to.index] ? canPlaceOnColumn(cards, to.index, wild) : false;
         return false;               // the row only ever fills from the deck
     }
 
@@ -591,11 +595,16 @@
 
     function useHint() {
         if (state.over) return;
+        if (!state.tools.hint) {
+            toast('No hints left on this level.');
+            return;
+        }
         var moves = legalMoves();
         if (!moves.length) {
             toast(state.stock.length ? 'Nothing to place — draw a card.' : 'No legal move left.');
             return;
         }
+        state.tools.hint--;
         var best = moves.reduce(function (a, b) { return scoreMove(b) > scoreMove(a) ? b : a; });
         render();
         highlight(best.from.zone, best.from.index, 'hint-from');
@@ -607,6 +616,11 @@
             toast('Nothing to undo yet.');
             return;
         }
+        if (!state.tools.undo) {
+            toast('No undos left on this level.');
+            return;
+        }
+        state.tools.undo--;
         var previous = state.history.pop();
         state.stock = previous.stock;
         state.row = previous.row;
@@ -621,12 +635,18 @@
 
     function useWild() {
         if (state.over) return;
-        if (state.wild) {
+        if (state.wild) {                       // putting it away hands it back
             state.wild = false;
+            state.tools.wild++;
             toast('Joker put away.');
             render();
             return;
         }
+        if (!state.tools.wild) {
+            toast('No jokers left on this level.');
+            return;
+        }
+        state.tools.wild--;
         state.wild = true;
         toast('Joker ready — your next group can start a column anywhere.');
         render();
@@ -663,7 +683,17 @@
         renderRow();
         renderFoundations();
         renderTableau();
-        document.getElementById('tool-wild').classList.toggle('armed', !!state && state.wild);
+        renderTools();
+    }
+
+    function renderTools() {
+        ['hint', 'undo', 'wild'].forEach(function (tool) {
+            var button = document.getElementById('tool-' + tool);
+            var left = state.tools[tool];
+            button.querySelector('.badge').textContent = left;
+            button.classList.toggle('spent', !left);
+        });
+        document.getElementById('tool-wild').classList.toggle('armed', state.wild);
     }
 
     function renderHeader() {
@@ -812,22 +842,30 @@
     function showLose() {
         openOverlay(
             '<h2>Out of moves</h2>' +
-            '<p>' + cardsLeft() + ' card' + (cardsLeft() === 1 ? '' : 's') + ' still on the table. ' +
-            'Undo costs coins but keeps the board alive.</p>' +
+            '<p>' + cardsLeft() + ' card' + (cardsLeft() === 1 ? '' : 's') + ' still on the table.' +
+            (state.tools.undo ? ' An undo keeps the board alive.' : '') + '</p>' +
             '<button class="btn primary" data-action="replay">Try again</button>' +
-            '<button class="btn" data-action="undo">Undo last move</button>' +
+            (state.tools.undo
+                ? '<button class="btn" data-action="undo">Undo last move (' + state.tools.undo + ' left)</button>'
+                : '') +
             '<button class="btn ghost" data-action="menu">Menu</button>'
         );
     }
 
     function showStuck() {
+        var outs = (state.tools.wild
+            ? '<button class="btn primary" data-action="wild">Take the joker (' + state.tools.wild + ' left)</button>'
+            : '') +
+            (state.tools.undo
+                ? '<button class="btn" data-action="undo">Undo (' + state.tools.undo + ' left)</button>'
+                : '');
         openOverlay(
             '<h2>No moves left</h2>' +
-            '<p>Nothing can be placed and the row is jammed. A joker starts a ' +
-            'column anywhere, or you can take a move back.</p>' +
-            '<button class="btn primary" data-action="wild">Take the joker</button>' +
-            '<button class="btn" data-action="undo">Undo</button>' +
-            '<button class="btn ghost" data-action="replay">Restart level</button>'
+            '<p>Nothing can be placed and the row is jammed.' +
+            (outs ? ' A joker starts a column anywhere, or you can take a move back.'
+                  : ' Nothing left to spend on this one — deal it again.') + '</p>' +
+            outs +
+            '<button class="btn' + (outs ? ' ghost' : ' primary') + '" data-action="replay">Restart level</button>'
         );
     }
 

@@ -58,7 +58,9 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   usable cards and keeps the order it dealt, so every deal is solvable and the
   move limit is derived from that solution. The dealer reads only what a player
   can see, never the buried cards
-- No coins: hint, undo and joker are free. Only level progress is stored, in
+- No coins. Hint, undo and joker are capped per level (3 / 5 / 1, see `LIMITS`
+  in `game.js`) and the allowance refills on a new deal; each button shows what
+  is left and greys out when spent. Only level progress is stored, in
   `localStorage`
 - `window.WordSolitaire` exposes `state()`, `newGame()`, `move()`, `autoMove()`,
   `draw()`, `legalMoves()` and `deal()` for console poking and automated checks

@@ -403,6 +403,34 @@
             animation: pulse 0.7s ease-in-out infinite alternate;
         }
 
+        .tool { position: relative; }
+
+        .badge {
+            position: absolute;
+            top: -6px;
+            right: 2px;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 5px;
+            border-radius: 10px;
+            background: #f4f1e8;
+            color: var(--ink);
+            border: 2px solid rgba(0, 0, 0, 0.12);
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 16px;
+            text-align: center;
+        }
+
+        .tool.spent .icon {
+            filter: grayscale(0.9);
+            opacity: 0.5;
+            box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12);
+        }
+
+        .tool.spent { cursor: not-allowed; }
+        .tool.spent .badge { background: #cfcfcf; color: #6f6f6f; }
+
         .tool .cost {
             font-size: 12px;
             font-weight: 600;
@@ -560,14 +588,17 @@
         <div class="tools">
             <button class="tool" id="tool-hint" type="button">
                 <span class="icon">&#128161;</span>
+                <span class="badge"></span>
                 <span class="cost">Hint</span>
             </button>
             <button class="tool" id="tool-undo" type="button">
                 <span class="icon">&#8630;</span>
+                <span class="badge"></span>
                 <span class="cost">Undo</span>
             </button>
             <button class="tool gold" id="tool-wild" type="button">
                 <span class="icon">&#127183;</span>
+                <span class="badge"></span>
                 <span class="cost">Joker</span>
             </button>
         </div>
