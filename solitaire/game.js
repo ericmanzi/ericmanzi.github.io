@@ -323,8 +323,8 @@
     function buildDeal(level, random) {
         for (var attempt = 0; attempt < 250; attempt++) {
             var cards = shuffle(buildCards(level), random);
-            // Stepped columns, as the board is dealt: 4, 5, 5, 6 for rows = 4.
-            var depths = [level.rows, level.rows + 1, level.rows + 1, level.rows + 2];
+            // A staircase, as the board is dealt: 4, 5, 6, 7 for rows = 4.
+            var depths = [level.rows, level.rows + 1, level.rows + 2, level.rows + 3];
             var tableau = [];
             var i;
             for (i = 0; i < COLUMNS; i++) {

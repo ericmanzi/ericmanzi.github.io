@@ -49,7 +49,7 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   the row only ever fills from the deck
 - Tableau columns are working space: words of one category stack on each other
   and move as a group. Cards are dealt face down except the card on top of each
-  column, in stepped depths (4, 5, 5, 6)
+  column, in a staircase (4, 5, 6, 7)
 - Filling a category clears its slot. Every action costs a move; the level is
   lost when the counter reaches zero with cards still out
 - Cards move by drag and drop (pointer events, so mouse and touch alike); a tap

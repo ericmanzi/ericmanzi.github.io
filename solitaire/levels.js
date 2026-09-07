@@ -33,7 +33,7 @@ var CATEGORIES = {
    slack — spare moves on top of the solution the dealer worked out, as a
            fraction of it */
 var LEVELS = [
-    { name: 'Warm Up',     cats: ['greek', 'rest', 'cities', 'fruit'],                                     rows: 3, slack: 0.50 },
+    { name: 'Warm Up',     cats: ['greek', 'rest', 'cities', 'fruit', 'weather'],                          rows: 3, slack: 0.50 },
     { name: 'Draw Pile',   cats: ['robots', 'sticky', 'coffee', 'weather', 'dance'],                       rows: 4, slack: 0.45 },
     { name: 'Four Slots',  cats: ['greek', 'planets', 'birds', 'boats', 'fabrics', 'big'],                 rows: 4, slack: 0.40 },
     { name: 'Deep Stacks', cats: ['rivers', 'spices', 'fabrics', 'music', 'geology', 'birds'],             rows: 4, slack: 0.35 },
