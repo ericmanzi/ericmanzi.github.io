@@ -1,16 +1,19 @@
 /* Word Solitaire — game engine and UI.
    No backend: the board lives in memory, coins and level progress in
-   localStorage. Depends on CATEGORIES and LEVELS from levels.js. */
+   localStorage. Depends on CATEGORIES and LEVELS from levels.js.
+
+   The board has four zones. The stock deals face-up cards into the row
+   beside it; that row is your holding space, a few slots wide. Four
+   foundation slots each hold one category, opened by that category's card
+   and filled with its words. The four tableau columns are working space:
+   words of one category stack on each other there and travel as a group. */
 
 (function () {
     'use strict';
 
-    var COSTS = { hint: 1100, undo: 600, wild: 2250 };
-    var START_COINS = 2303;
-    var REWARD_CATEGORY = 150;
-    var REWARD_LEVEL = 400;
-    var REWARD_PER_MOVE = 25;
-    var KEY_COINS = 'wordSolitaire.coins';
+    var ROW_SLOTS = 3;          // the row the deck deals into
+    var SLOTS = 4;              // foundation slots
+    var COLUMNS = 4;            // tableau columns
     var KEY_PROGRESS = 'wordSolitaire.progress';
 
     /* ---------------------------------------------------------------- store */
@@ -28,36 +31,53 @@
         try { window.localStorage.setItem(key, String(value)); } catch (err) { /* private mode */ }
     }
 
-    var coins = readNumber(KEY_COINS, START_COINS);
     var progress = readNumber(KEY_PROGRESS, 0);
     var state = null;
 
-    /* ------------------------------------------------------------ card help */
+    /* ----------------------------------------------------------- card rules */
 
-    function categoryOf(card) { return CATEGORIES[card.cat]; }
+    function catSize(catId) { return CATEGORIES[catId].words.length; }
 
-    /* The cards a tap picks up: the run of same-category face-up cards at the
-       top of a column. Everything the game does keys off this one idea. */
-    function topRun(column, ignoreFacing) {
+    /* What a tap on a column picks up: the face-up run of same-category word
+       cards on top of it, or a single category card. */
+    function topRun(column) {
         if (!column.length) return [];
         var last = column[column.length - 1];
-        if (!last.faceUp && !ignoreFacing) return [];
+        if (!last.faceUp) return [];
+        if (last.kind === 'cat') return [last];
         var run = [];
         for (var i = column.length - 1; i >= 0; i--) {
             var card = column[i];
-            if (card.cat !== last.cat) break;
-            if (!card.faceUp && !ignoreFacing) break;
+            if (!card.faceUp || card.kind !== 'word' || card.cat !== last.cat) break;
             run.unshift(card);
         }
         return run;
     }
 
-    function canPlace(run, column, wild) {
-        if (!run.length) return false;
+    function slotOf(catId) {
+        for (var i = 0; i < state.foundations.length; i++) {
+            if (state.foundations[i] && state.foundations[i].cat === catId) return i;
+        }
+        return -1;
+    }
+
+    function canPlaceOnFoundation(cards, index) {
+        var pile = state.foundations[index];
+        var card = cards[0];
+        if (card.kind === 'cat') {
+            return cards.length === 1 && !pile && slotOf(card.cat) < 0 &&
+                state.completed.indexOf(card.cat) < 0;
+        }
+        return !!pile && pile.cat === card.cat && pile.cards.length + cards.length <= catSize(pile.cat);
+    }
+
+    function canPlaceOnColumn(cards, index, wild) {
+        var column = state.tableau[index];
         if (!column.length) return true;
-        if (wild) return true;
         var top = column[column.length - 1];
-        return top.faceUp && top.cat === run[0].cat;
+        if (!top.faceUp) return false;
+        if (wild) return true;
+        return top.kind === 'word' && cards[0].kind === 'word' && top.cat === cards[0].cat;
     }
 
     function flipTop(column) {
@@ -65,7 +85,9 @@
     }
 
     function cardsLeft() {
-        return state.columns.reduce(function (total, column) { return total + column.length; }, 0);
+        var total = state.stock.length + state.row.length;
+        state.tableau.forEach(function (column) { total += column.length; });
+        return total;
     }
 
     /* ---------------------------------------------------------------- dealer */
@@ -80,111 +102,276 @@
         };
     }
 
-    function pickIndex(list, random, ok) {
-        var candidates = [];
-        for (var i = 0; i < list.length; i++) if (ok(list[i], i)) candidates.push(i);
-        if (!candidates.length) return -1;
-        return candidates[Math.floor(random() * candidates.length)];
-    }
-
-    /* Deal by playing a solved board backwards: start with every category
-       stacked in its own column, then repeatedly lift part of a group and
-       drop it elsewhere. Each of those is the exact inverse of a legal move,
-       so replaying them in reverse always solves the deal. */
-    function scramble(columns, count, maxHeight, random) {
-        var applied = 0;
-        var guard = 0;
-        while (applied < count && guard < count * 80) {
-            guard++;
-            var from = pickIndex(columns, random, function (column) { return column.length > 0; });
-            if (from < 0) break;
-            var run = topRun(columns[from], true);
-            var take = 1 + Math.floor(random() * run.length);
-            var to = pickIndex(columns, random, function (column, i) {
-                return i !== from && column.length + take <= maxHeight;
-            });
-            if (to < 0) continue;
-            // Sliding a whole column into an empty one changes nothing.
-            if (columns[from].length === take && !columns[to].length) continue;
-            columns[to] = columns[to].concat(columns[from].splice(columns[from].length - take, take));
-            applied++;
+    function shuffle(list, random) {
+        for (var i = list.length - 1; i > 0; i--) {
+            var j = Math.floor(random() * (i + 1));
+            var swap = list[i];
+            list[i] = list[j];
+            list[j] = swap;
         }
-        return applied;
+        return list;
     }
 
-    function hasCompleteColumn(columns) {
-        return columns.some(function (column) {
-            var run = topRun(column, true);
-            return run.length && run.length === categoryOf(run[0]).words.length;
-        });
-    }
-
-    function freshLayout(level) {
-        var columns = [];
-        for (var i = 0; i < level.columns; i++) columns.push([]);
-        level.cats.forEach(function (catId, index) {
-            columns[index] = CATEGORIES[catId].words.map(function (word, n) {
-                return { id: catId + '-' + n, word: word, cat: catId, faceUp: true };
+    function buildCards(level) {
+        var cards = [];
+        level.cats.forEach(function (catId) {
+            cards.push({ id: catId + '-card', kind: 'cat', cat: catId, word: CATEGORIES[catId].name });
+            CATEGORIES[catId].words.forEach(function (word, n) {
+                cards.push({ id: catId + '-' + n, kind: 'word', cat: catId, word: word });
             });
         });
-        return columns;
+        return cards;
+    }
+
+    /* Play the level through with a dealer that hands over a card the player
+       can actually use, and keep the order it dealt. The run only ever reads
+       what a player can see — the tops of the columns and the holding row —
+       so the order it produces is solvable without knowing the buried cards.
+       Returns the stock order and the length of that solution. */
+    function cloneCard(card) {
+        return { id: card.id, kind: card.kind, cat: card.cat, word: card.word, faceUp: !!card.faceUp };
+    }
+
+    function simulate(level, layout, pool) {
+        var tableau = layout.map(function (column) { return column.map(cloneCard); });
+        var row = [];
+        var piles = [];
+        var open = {};
+        var finished = {};
+        var stock = [];
+        var left = pool.map(cloneCard);
+        var moves = 0;
+        var i;
+
+        for (i = 0; i < SLOTS; i++) piles.push(null);
+
+        function freeSlot() { return piles.indexOf(null); }
+
+        function empty() {
+            return !left.length && !row.length && tableau.every(function (c) { return !c.length; });
+        }
+
+        function collect(cards) {
+            var cat = cards[0].cat;
+            var slot = open[cat];
+            piles[slot].count += cards.length;
+            moves++;
+            if (piles[slot].count === catSize(cat)) {
+                piles[slot] = null;
+                delete open[cat];
+                finished[cat] = true;
+            }
+        }
+
+        function openCategory(card) {
+            var slot = freeSlot();
+            piles[slot] = { cat: card.cat, count: 0 };
+            open[card.cat] = slot;
+            moves++;
+        }
+
+        // How many cards of a category are waiting on the board — the dealer
+        // opens the category that unblocks the most.
+        function pressure(catId) {
+            var n = 0;
+            tableau.forEach(function (column) {
+                column.forEach(function (card) { if (card.cat === catId && card.kind === 'word') n++; });
+            });
+            row.forEach(function (card) { if (card.cat === catId && card.kind === 'word') n++; });
+            return n;
+        }
+
+        for (var guard = 0; guard < 6000; guard++) {
+            if (empty()) return { stock: stock, moves: moves };
+
+            var acted = false;
+            var t;
+            var card;
+
+            // 1. Feed an open foundation from the tableau first: it uncovers cards.
+            //    A whole group travels at once, exactly as it does on the board.
+            for (t = 0; t < tableau.length && !acted; t++) {
+                var column = tableau[t];
+                var run = topRunOf(column);
+                if (!run.length || run[0].kind !== 'word' || !open.hasOwnProperty(run[0].cat)) continue;
+                column.splice(column.length - run.length, run.length);
+                flipTop(column);
+                collect(run);
+                acted = true;
+            }
+            if (acted) continue;
+
+            // 2. Then from the row the deck deals into.
+            for (i = 0; i < row.length && !acted; i++) {
+                if (row[i].kind === 'word' && open.hasOwnProperty(row[i].cat)) {
+                    collect(row.splice(i, 1));
+                    acted = true;
+                }
+            }
+            if (acted) continue;
+
+            // 3. Open a category with a card that is already in reach.
+            if (freeSlot() >= 0) {
+                for (t = 0; t < tableau.length && !acted; t++) {
+                    var col = tableau[t];
+                    if (!col.length) continue;
+                    card = col[col.length - 1];
+                    if (card.kind === 'cat' && !finished[card.cat] && !open.hasOwnProperty(card.cat)) {
+                        col.pop();
+                        flipTop(col);
+                        openCategory(card);
+                        acted = true;
+                    }
+                }
+                for (i = 0; i < row.length && !acted; i++) {
+                    card = row[i];
+                    if (card.kind === 'cat' && !finished[card.cat] && !open.hasOwnProperty(card.cat)) {
+                        row.splice(i, 1);
+                        openCategory(card);
+                        acted = true;
+                    }
+                }
+                if (acted) continue;
+            }
+
+            // 4. Draw. The dealer picks a card the player can use right now.
+            if (left.length && row.length < ROW_SLOTS) {
+                var pick = -1;
+                for (i = 0; i < left.length; i++) {
+                    if (left[i].kind === 'word' && open.hasOwnProperty(left[i].cat)) { pick = i; break; }
+                }
+                if (pick < 0 && freeSlot() >= 0) {
+                    var best = -1;
+                    for (i = 0; i < left.length; i++) {
+                        if (left[i].kind !== 'cat' || finished[left[i].cat] || open.hasOwnProperty(left[i].cat)) continue;
+                        var score = pressure(left[i].cat);
+                        if (score > best) { best = score; pick = i; }
+                    }
+                }
+                if (pick < 0) pick = 0;
+                card = left.splice(pick, 1)[0];
+                card.faceUp = true;
+                stock.push(card);
+                row.push(card);
+                moves++;
+                continue;
+            }
+
+            // 5. Unload the row onto a column of the same category.
+            for (i = 0; i < row.length && !acted; i++) {
+                if (row[i].kind !== 'word') continue;
+                for (t = 0; t < tableau.length && !acted; t++) {
+                    var head = tableau[t].length ? tableau[t][tableau[t].length - 1] : null;
+                    if (!head || !head.faceUp || head.kind !== 'word' || head.cat !== row[i].cat) continue;
+                    tableau[t].push(row.splice(i, 1)[0]);
+                    moves++;
+                    acted = true;
+                }
+            }
+            if (acted) continue;
+
+            // 6. Dig: move a run onto a matching column to uncover what is under it.
+            for (t = 0; t < tableau.length && !acted; t++) {
+                var dig = topRunOf(tableau[t]);
+                if (!dig.length || dig.length === tableau[t].length || dig[0].kind !== 'word') continue;
+                for (var d = 0; d < tableau.length && !acted; d++) {
+                    if (d === t) continue;
+                    var onto = tableau[d];
+                    if (!onto.length) continue;
+                    var lid = onto[onto.length - 1];
+                    if (!lid.faceUp || lid.kind !== 'word' || lid.cat !== dig[0].cat) continue;
+                    tableau[t].splice(tableau[t].length - dig.length, dig.length);
+                    flipTop(tableau[t]);
+                    tableau[d] = onto.concat(dig);
+                    moves++;
+                    acted = true;
+                }
+            }
+            if (acted) continue;
+
+            // 7. Last resort: an empty column will take anything.
+            for (i = 0; i < row.length && !acted; i++) {
+                for (t = 0; t < tableau.length && !acted; t++) {
+                    if (tableau[t].length) continue;
+                    tableau[t].push(row.splice(i, 1)[0]);
+                    moves++;
+                    acted = true;
+                }
+            }
+            if (acted) continue;
+
+            return null;   // wedged — the caller deals again
+        }
+        return null;
+    }
+
+    // topRun without the module-level state, for the dealer's own board.
+    function topRunOf(column) {
+        if (!column.length) return [];
+        var last = column[column.length - 1];
+        if (!last.faceUp) return [];
+        if (last.kind === 'cat') return [last];
+        var run = [];
+        for (var i = column.length - 1; i >= 0; i--) {
+            var card = column[i];
+            if (!card.faceUp || card.kind !== 'word' || card.cat !== last.cat) break;
+            run.unshift(card);
+        }
+        return run;
     }
 
     function buildDeal(level, random) {
-        var columns = freshLayout(level);
-        // Re-deal rather than shuffling further, so the move budget stays tied
-        // to the scramble length: a board that starts with a finished group or
-        // with no free column makes for a poor opening.
-        for (var attempt = 0; attempt < 60; attempt++) {
-            var candidate = freshLayout(level);
-            if (scramble(candidate, level.scramble, level.maxHeight, random) < level.scramble) continue;
-            if (hasCompleteColumn(candidate)) continue;
-            if (!candidate.some(function (column) { return !column.length; })) continue;
-            columns = candidate;
-            break;
-        }
-
-        // Bury everything under a column's top group except the single card
-        // right beneath it — enough mystery to matter, enough information to
-        // plan with. That card can never share the group's category, since the
-        // group above it is already maximal.
-        var hidden = 0;
-        if (level.hidden) {
-            columns.forEach(function (column) {
-                var buried = column.length - topRun(column, true).length - 1;
-                for (var n = 0; n < buried; n++) {
-                    column[n].faceUp = false;
-                    hidden++;
+        for (var attempt = 0; attempt < 250; attempt++) {
+            var cards = shuffle(buildCards(level), random);
+            // Stepped columns, as the board is dealt: 4, 5, 5, 6 for rows = 4.
+            var depths = [level.rows, level.rows + 1, level.rows + 1, level.rows + 2];
+            var tableau = [];
+            var i;
+            for (i = 0; i < COLUMNS; i++) {
+                tableau.push([]);
+                for (var n = 0; n < depths[i]; n++) {
+                    var card = cards.pop();
+                    card.faceUp = n === depths[i] - 1;   // only the card on top shows
+                    tableau[i].push(card);
                 }
-            });
+            }
+            var plan = simulate(level, tableau, cards);
+            if (!plan) continue;
+            return {
+                tableau: tableau,
+                stock: plan.stock.map(function (card) {
+                    card.faceUp = false;
+                    return card;
+                }).reverse(),                          // drawn from the end
+                solution: plan.moves,
+                moveLimit: Math.round(plan.moves * (1 + level.slack)),
+                attempts: attempt + 1
+            };
         }
-
-        // Replaying the scramble backwards always solves the board; a face-down
-        // card can force a group to travel one card at a time, so those are
-        // paid for too, plus the level's slack for the player's own detours.
-        return {
-            columns: columns,
-            hidden: hidden,
-            moveLimit: level.scramble + hidden + level.slack
-        };
+        return null;
     }
 
     /* ------------------------------------------------------------- game flow */
 
     function newGame(levelIndex) {
         var level = LEVELS[levelIndex];
-        var deal = buildDeal(level, mulberry32((Math.random() * 4294967296) >>> 0));
+        var deal = null;
+        while (!deal) deal = buildDeal(level, mulberry32((Math.random() * 4294967296) >>> 0));
+        var foundations = [];
+        for (var i = 0; i < SLOTS; i++) foundations.push(null);
         state = {
             levelIndex: levelIndex,
             level: level,
-            columns: deal.columns,
+            stock: deal.stock,
+            row: [],
+            foundations: foundations,
+            tableau: deal.tableau,
+            completed: [],
             moves: deal.moveLimit,
             moveLimit: deal.moveLimit,
-            collected: [],
-            selection: null,
+            solution: deal.solution,
             history: [],
             wild: false,
-            earned: 0,
             over: null
         };
         closeOverlay();
@@ -192,112 +379,202 @@
     }
 
     function snapshot() {
-        state.history.push({
-            columns: JSON.parse(JSON.stringify(state.columns)),
-            collected: state.collected.slice(),
+        state.history.push(JSON.parse(JSON.stringify({
+            stock: state.stock,
+            row: state.row,
+            foundations: state.foundations,
+            tableau: state.tableau,
+            completed: state.completed,
             moves: state.moves
-        });
-        if (state.history.length > 200) state.history.shift();
+        })));
+        if (state.history.length > 250) state.history.shift();
     }
 
-    function onColumn(index) {
+    function drawCard() {
         if (state.over) return;
-        clearHints();
-        if (state.selection === null) {
-            if (!topRun(state.columns[index]).length) {
-                toast(state.columns[index].length ? 'That card is still face down.' : 'That column is empty.');
-                return;
-            }
-            state.selection = index;
-            render();
+        if (!state.stock.length) {
+            toast('The deck is empty.');
             return;
         }
-        if (state.selection === index) {
-            state.selection = null;
-            render();
-            return;
-        }
-        tryMove(state.selection, index);
-    }
-
-    function tryMove(from, to) {
-        var run = topRun(state.columns[from]);
-        var wild = state.wild;
-        if (!canPlace(run, state.columns[to], wild)) {
-            toast('You can only stack words from the same category.');
-            shake(to);
+        if (state.row.length >= ROW_SLOTS) {
+            toast('No room in the row — place a card first.');
             return;
         }
         snapshot();
-        var moved = state.columns[from].splice(state.columns[from].length - run.length, run.length);
-        state.columns[to] = state.columns[to].concat(moved);
-        flipTop(state.columns[from]);
+        var card = state.stock.pop();
+        card.faceUp = true;
+        state.row.push(card);
         state.moves--;
-        state.selection = null;
-        if (wild) state.wild = false;
-        resolveCompletions();
         render();
         checkEnd();
     }
 
-    /* A column holding every word of a category locks the group in and
-       clears it off the board. */
-    function resolveCompletions() {
-        var again = true;
-        while (again) {
-            again = false;
-            state.columns.forEach(function (column) {
-                var run = topRun(column);
-                if (!run.length || run.length !== categoryOf(run[0]).words.length) return;
-                column.splice(column.length - run.length, run.length);
-                state.collected.push(run[0].cat);
-                flipTop(column);
-                addCoins(REWARD_CATEGORY);
-                state.earned += REWARD_CATEGORY;
-                toast(categoryOf(run[0]).name + ' complete  +' + REWARD_CATEGORY);
-                again = true;
-            });
+    function pickable(zone, index) {
+        if (zone === 'tableau') return topRun(state.tableau[index]);
+        if (zone === 'row') return state.row[index] ? [state.row[index]] : [];
+        return [];
+    }
+
+    function take(from) {
+        if (from.zone === 'tableau') {
+            var column = state.tableau[from.index];
+            var run = topRun(column);
+            column.splice(column.length - run.length, run.length);
+            flipTop(column);
+            return run;
         }
+        return state.row.splice(from.index, 1);
+    }
+
+    function destinations() {
+        var list = [];
+        var i;
+        for (i = 0; i < SLOTS; i++) list.push({ zone: 'foundation', index: i });
+        for (i = 0; i < COLUMNS; i++) list.push({ zone: 'tableau', index: i });
+        return list;
+    }
+
+    function canDrop(cards, to, wild) {
+        if (!cards.length) return false;
+        if (to.zone === 'foundation') return canPlaceOnFoundation(cards, to.index);
+        if (to.zone === 'tableau') return canPlaceOnColumn(cards, to.index, wild);
+        return false;               // the row only ever fills from the deck
+    }
+
+    function rejection(cards, to) {
+        if (to.zone === 'row') return 'The row only takes cards dealt from the deck.';
+        if (to.zone === 'foundation') {
+            var pile = state.foundations[to.index];
+            if (!pile) return 'Only a crowned category card can open a slot.';
+            if (cards[0].kind === 'cat') return 'That slot is already taken.';
+        }
+        return 'You can only stack words from the same category.';
+    }
+
+    function moveCards(from, to) {
+        if (state.over) return false;
+        var cards = pickable(from.zone, from.index);
+        if (!cards.length) return false;
+        if (from.zone === to.zone && from.index === to.index) return false;
+        if (!canDrop(cards, to, state.wild)) {
+            toast(rejection(cards, to));
+            shake(to.zone, to.index);
+            return false;
+        }
+        var neededWild = to.zone === 'tableau' && !canPlaceOnColumn(cards, to.index, false);
+        snapshot();
+        var moved = take(from);
+        if (to.zone === 'foundation') {
+            if (moved[0].kind === 'cat') {
+                state.foundations[to.index] = { cat: moved[0].cat, cards: [] };
+            } else {
+                state.foundations[to.index].cards = state.foundations[to.index].cards.concat(moved);
+            }
+        } else {
+            state.tableau[to.index] = state.tableau[to.index].concat(moved);
+        }
+        if (neededWild) state.wild = false;
+        state.moves--;
+        resolveCompletions();
+        render();
+        checkEnd();
+        return true;
+    }
+
+    /* Tapping a card instead of dragging it sends it to the best home. */
+    function autoMove(from) {
+        if (state.over) return false;
+        var cards = pickable(from.zone, from.index);
+        if (!cards.length) return false;
+        var best = null;
+        var bestScore = -1;
+        destinations().forEach(function (to) {
+            if (from.zone === to.zone && from.index === to.index) return;
+            if (!canDrop(cards, to, state.wild)) return;
+            var score = scoreMove({ from: { zone: from.zone, index: from.index, cards: cards }, to: to });
+            if (score > bestScore) {
+                bestScore = score;
+                best = to;
+            }
+        });
+        if (!best) {
+            toast('Nowhere to put that yet.');
+            return false;
+        }
+        return moveCards(from, best);
+    }
+
+    /* A foundation holding every word of its category locks in, clears the
+       slot for the next category, and pays out. */
+    function resolveCompletions() {
+        state.foundations.forEach(function (pile, index) {
+            if (!pile || pile.cards.length < catSize(pile.cat)) return;
+            state.foundations[index] = null;
+            state.completed.push(pile.cat);
+            toast(CATEGORIES[pile.cat].name + ' complete');
+        });
+    }
+
+    /* ------------------------------------------------------------ move lists */
+
+    function sources() {
+        var list = [];
+        state.tableau.forEach(function (column, index) {
+            var run = topRun(column);
+            if (run.length) list.push({ zone: 'tableau', index: index, cards: run });
+        });
+        state.row.forEach(function (card, index) {
+            list.push({ zone: 'row', index: index, cards: [card] });
+        });
+        return list;
     }
 
     function legalMoves() {
         var moves = [];
-        state.columns.forEach(function (column, from) {
-            var run = topRun(column);
-            if (!run.length) return;
-            state.columns.forEach(function (target, to) {
-                if (to === from) return;
-                if (!canPlace(run, target, false)) return;
-                // Shuffling a whole column into an empty one is not progress.
-                if (!target.length && column.length === run.length) return;
-                moves.push({ from: from, to: to, run: run, target: target });
+        sources().forEach(function (from) {
+            destinations().forEach(function (to) {
+                if (from.zone === to.zone && from.index === to.index) return;
+                if (!canDrop(from.cards, to, false)) return;
+                // Sliding a whole column into an empty one is not progress.
+                if (to.zone === 'tableau' && !state.tableau[to.index].length &&
+                    from.zone === 'tableau' &&
+                    state.tableau[from.index].length === from.cards.length) return;
+                moves.push({ from: from, to: to });
             });
         });
         return moves;
     }
 
     function scoreMove(move) {
-        var size = categoryOf(move.run[0]).words.length;
+        var cards = move.from.cards;
         var score = 0;
-        if (move.target.length && move.target.length + move.run.length === size) score += 100;
-        if (move.target.length) score += 40 + move.run.length;
-        if (state.columns[move.from].length === move.run.length) score += 20;
+        if (move.to.zone === 'foundation') {
+            var pile = state.foundations[move.to.index];
+            if (cards[0].kind === 'cat') return 70;
+            score = 80 + cards.length;
+            if (pile.cards.length + cards.length === catSize(pile.cat)) score += 60;
+            return score;
+        }
+        score = 40 + cards.length;
+        if (move.from.zone === 'row') score += 10;                        // frees a slot
+        if (move.from.zone === 'tableau') {
+            var column = state.tableau[move.from.index];
+            if (column.length === cards.length) score += 15;              // empties a column
+            else if (!column[column.length - cards.length - 1].faceUp) score += 20;   // uncovers
+        }
         return score;
     }
 
     function checkEnd() {
         if (state.over) return;
-        if (!cardsLeft()) {
-            var bonus = REWARD_LEVEL + state.moves * REWARD_PER_MOVE;
-            addCoins(bonus);
-            state.earned += bonus;
+        if (!cardsLeft() && !state.foundations.some(Boolean)) {
             state.over = 'win';
             if (state.levelIndex + 1 > progress) {
                 progress = state.levelIndex + 1;
                 writeNumber(KEY_PROGRESS, progress);
             }
             render();
-            showWin(bonus);
+            showWin();
             return;
         }
         if (state.moves <= 0) {
@@ -306,38 +583,23 @@
             showLose();
             return;
         }
-        if (!legalMoves().length) showStuck();
+        var canDraw = state.stock.length && state.row.length < ROW_SLOTS;
+        if (!canDraw && !legalMoves().length) showStuck();
     }
 
     /* -------------------------------------------------------------- power-ups */
-
-    function addCoins(amount) {
-        coins += amount;
-        writeNumber(KEY_COINS, coins);
-    }
-
-    function spend(cost) {
-        if (coins < cost) {
-            toast('Not enough coins for that.');
-            return false;
-        }
-        addCoins(-cost);
-        return true;
-    }
 
     function useHint() {
         if (state.over) return;
         var moves = legalMoves();
         if (!moves.length) {
-            toast('No legal move on the board — try a joker or restart.');
+            toast(state.stock.length ? 'Nothing to place — draw a card.' : 'No legal move left.');
             return;
         }
-        if (!spend(COSTS.hint)) return;
         var best = moves.reduce(function (a, b) { return scoreMove(b) > scoreMove(a) ? b : a; });
-        state.selection = null;
         render();
-        highlight(best.from, 'hint-from');
-        highlight(best.to, 'hint-to');
+        highlight(best.from.zone, best.from.index, 'hint-from');
+        highlight(best.to.zone, best.to.index, 'hint-to');
     }
 
     function useUndo() {
@@ -345,12 +607,13 @@
             toast('Nothing to undo yet.');
             return;
         }
-        if (!spend(COSTS.undo)) return;
         var previous = state.history.pop();
-        state.columns = previous.columns;
-        state.collected = previous.collected;
+        state.stock = previous.stock;
+        state.row = previous.row;
+        state.foundations = previous.foundations;
+        state.tableau = previous.tableau;
+        state.completed = previous.completed;
         state.moves = previous.moves;
-        state.selection = null;
         state.over = null;
         closeOverlay();
         render();
@@ -358,76 +621,101 @@
 
     function useWild() {
         if (state.over) return;
-        if (state.wild) {            // tapping again cancels and refunds
+        if (state.wild) {
             state.wild = false;
-            addCoins(COSTS.wild);
-            toast('Joker put back. Coins refunded.');
+            toast('Joker put away.');
             render();
             return;
         }
-        if (!spend(COSTS.wild)) return;
         state.wild = true;
-        toast('Joker ready — your next group can start a stack anywhere.');
+        toast('Joker ready — your next group can start a column anywhere.');
         render();
     }
 
     /* ---------------------------------------------------------------- render */
 
     var boardEl = document.getElementById('board');
-    var trayEl = document.getElementById('tray');
+    var rowEl = document.getElementById('row');
+    var stockEl = document.getElementById('stock');
+    var foundationsEl = document.getElementById('foundations');
     var movesEl = document.getElementById('moves');
-    var coinsEl = document.getElementById('coins');
-    var earnedEl = document.getElementById('earned');
     var dotsEl = document.getElementById('dots');
     var levelEl = document.getElementById('level-name');
     var toastEl = document.getElementById('toast');
     var overlayEl = document.getElementById('overlay');
     var panelEl = document.getElementById('panel');
 
+    function cardFace(card, options) {
+        options = options || {};
+        var classes = 'card' + (card.kind === 'cat' ? ' catcard' : '') + (options.classes || '');
+        var style = options.style ? ' style="' + options.style + '"' : '';
+        var inner = options.prefix || '';
+        if (card.kind === 'cat') {
+            inner += '<span class="crown">&#9819;</span>' +
+                '<span class="count">0/' + catSize(card.cat) + '</span>';
+        }
+        inner += '<span class="word' + (card.word.length > 7 ? ' long' : '') + '">' + card.word + '</span>';
+        return '<div class="' + classes + '"' + style + '>' + inner + '</div>';
+    }
+
     function render() {
         renderHeader();
-        renderTray();
-        renderBoard();
-        renderTools();
+        renderRow();
+        renderFoundations();
+        renderTableau();
+        document.getElementById('tool-wild').classList.toggle('armed', !!state && state.wild);
     }
 
     function renderHeader() {
-        coinsEl.textContent = coins;
-        movesEl.textContent = state ? state.moves : '—';
-        movesEl.classList.toggle('low', !!state && state.moves <= 5);
-        levelEl.textContent = state ? 'Level ' + (state.levelIndex + 1) + ' · ' + state.level.name : '';
-        earnedEl.textContent = state && state.earned ? '+' + state.earned : '';
-        earnedEl.classList.toggle('show', !!(state && state.earned));
-
+        movesEl.textContent = state.moves;
+        movesEl.classList.toggle('low', state.moves <= 5);
+        levelEl.textContent = 'Level ' + (state.levelIndex + 1) + ' · ' + state.level.name;
         var dots = '';
-        for (var i = 0; i < LEVELS.length; i++) {
-            var cls = 'dot';
-            if (i < progress) cls += ' done';
-            if (state && i === state.levelIndex) cls += ' current';
-            dots += '<span class="' + cls + '">' + (i < progress ? '&#10003;' : '') + '</span>';
-        }
+        state.level.cats.forEach(function (catId) {
+            var done = state.completed.indexOf(catId) >= 0;
+            dots += '<span class="dot' + (done ? ' done' : '') + '">' + (done ? '&#10003;' : '') + '</span>';
+        });
         dotsEl.innerHTML = dots;
     }
 
-    function renderTray() {
+    function renderRow() {
         var html = '';
-        state.level.cats.forEach(function (catId) {
-            var category = CATEGORIES[catId];
-            if (state.collected.indexOf(catId) >= 0) {
-                html += '<div class="done-card" style="border-color:' + category.color + '">' +
-                    '<span class="crown">&#9819;</span>' + category.name + '</div>';
-            } else {
-                html += '<div class="done-slot"><span>&#9819;</span></div>';
-            }
-        });
-        trayEl.innerHTML = html;
+        for (var i = 0; i < ROW_SLOTS; i++) {
+            var card = state.row[i];
+            html += '<div class="rowslot" data-zone="row" data-index="' + i + '">' +
+                (card ? cardFace(card) : '<div class="hole"></div>') +
+                '</div>';
+        }
+        rowEl.innerHTML = html;
+        stockEl.innerHTML = state.stock.length
+            ? '<div class="card facedown"><span class="stockcount">' + state.stock.length + '</span></div>'
+            : '<div class="hole empty-stock"></div>';
     }
 
-    function renderBoard() {
+    function renderFoundations() {
         var html = '';
-        state.columns.forEach(function (column, index) {
-            var run = topRun(column);
-            var selected = state.selection === index;
+        state.foundations.forEach(function (pile, index) {
+            if (!pile) {
+                html += '<div class="fslot" data-zone="foundation" data-index="' + index + '">' +
+                    '<div class="hole"><span>&#9819;</span></div></div>';
+                return;
+            }
+            var category = CATEGORIES[pile.cat];
+            var top = pile.cards[pile.cards.length - 1];
+            var body = '<span class="tab" style="background:' + category.color + '">' + category.name + '</span>' +
+                '<div class="card' + (pile.cards.length ? '' : ' catcard') + '">' +
+                (pile.cards.length ? '' : '<span class="crown">&#9819;</span>') +
+                '<span class="count">' + pile.cards.length + '/' + catSize(pile.cat) + '</span>' +
+                '<span class="word' + (top && top.word.length > 7 ? ' long' : '') + '">' +
+                (top ? top.word : category.name) + '</span></div>';
+            html += '<div class="fslot filled" data-zone="foundation" data-index="' + index + '">' + body + '</div>';
+        });
+        foundationsEl.innerHTML = html;
+    }
+
+    function renderTableau() {
+        var html = '';
+        state.tableau.forEach(function (column, index) {
             var faceDownBefore = 0;
             var faceUpBefore = 0;
             var lastFd = 0;
@@ -445,41 +733,21 @@
                     return;
                 }
 
-                var category = CATEGORIES[card.cat];
-                var inRun = selected && position >= column.length - run.length;
-                var isTop = position === column.length - 1;
-                var classes = 'card' + (inRun ? ' picked' : '');
-                // A group of two or more has given its category away, so name it
-                // on the card along with how much of the set is together.
-                var badge = '';
-                if (isTop && run.length > 1) {
-                    badge = '<span class="tag" style="background:' + category.color + '"><i>' +
-                        category.name + '</i><b>' + run.length + '/' + category.words.length + '</b></span>';
-                } else if (isTop && run.length) {
-                    badge = '<span class="count">' + run.length + '/' + category.words.length + '</span>';
-                }
-                var wordClass = 'word' + (card.word.length > 7 ? ' long' : '');
-                if (!isTop) classes += ' covered';   // word rides up into the visible sliver
-                cards += '<div class="' + classes + '" style="top:' + offset + '">' + badge +
-                    '<span class="' + wordClass + '">' + card.word + '</span></div>';
+                cards += cardFace(card, {
+                    classes: position === column.length - 1 ? '' : ' covered',
+                    style: 'top:' + offset
+                });
             });
 
-            if (!column.length) {
-                cards = '<div class="slot"><span>&#9819;</span></div>';
-            }
+            if (!column.length) cards = '<div class="hole"></div>';
 
             var height = column.length
                 ? 'calc(var(--card-h) + var(--fd) * ' + lastFd + ' + var(--fu) * ' + lastFu + ')'
                 : 'var(--card-h)';
-
-            html += '<div class="col' + (selected ? ' selected' : '') + '" data-index="' + index +
-                '" style="min-height:' + height + '">' + cards + '</div>';
+            html += '<div class="col" data-zone="tableau" data-index="' + index + '" style="min-height:' +
+                height + '">' + cards + '</div>';
         });
         boardEl.innerHTML = html;
-    }
-
-    function renderTools() {
-        document.getElementById('tool-wild').classList.toggle('armed', !!state && state.wild);
     }
 
     /* ------------------------------------------------------------- feedback */
@@ -492,27 +760,27 @@
         toastTimer = window.setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
     }
 
-    function columnEl(index) {
-        return boardEl.querySelector('[data-index="' + index + '"]');
+    function zoneEl(zone, index) {
+        return document.querySelector('[data-zone="' + zone + '"][data-index="' + index + '"]');
     }
 
-    function shake(index) {
-        var el = columnEl(index);
+    function shake(zone, index) {
+        var el = zoneEl(zone, index);
         if (!el) return;
         el.classList.remove('shake');
         void el.offsetWidth;
         el.classList.add('shake');
     }
 
-    function highlight(index, cls) {
-        var el = columnEl(index);
+    function highlight(zone, index, cls) {
+        var el = zoneEl(zone, index);
         if (!el) return;
         el.classList.add(cls);
         window.setTimeout(function () { el.classList.remove(cls); }, 3000);
     }
 
     function clearHints() {
-        Array.prototype.forEach.call(boardEl.querySelectorAll('.hint-from, .hint-to'), function (el) {
+        Array.prototype.forEach.call(document.querySelectorAll('.hint-from, .hint-to'), function (el) {
             el.classList.remove('hint-from');
             el.classList.remove('hint-to');
         });
@@ -529,11 +797,10 @@
         overlayEl.classList.remove('show');
     }
 
-    function showWin(bonus) {
+    function showWin() {
         openOverlay(
-            '<h2>Board cleared</h2>' +
-            '<p>Every word grouped with ' + state.moves + ' move' + (state.moves === 1 ? '' : 's') + ' to spare.</p>' +
-            '<p class="reward"><span class="coin">&#9819;</span> +' + bonus + '</p>' +
+            '<h2>Table cleared</h2>' +
+            '<p>Every category home with ' + state.moves + ' move' + (state.moves === 1 ? '' : 's') + ' to spare.</p>' +
             (state.levelIndex + 1 < LEVELS.length
                 ? '<button class="btn primary" data-action="next">Next level</button>'
                 : '<p>That was the last level — nicely done.</p>') +
@@ -545,10 +812,10 @@
     function showLose() {
         openOverlay(
             '<h2>Out of moves</h2>' +
-            '<p>' + cardsLeft() + ' card' + (cardsLeft() === 1 ? '' : 's') + ' left on the table. ' +
+            '<p>' + cardsLeft() + ' card' + (cardsLeft() === 1 ? '' : 's') + ' still on the table. ' +
             'Undo costs coins but keeps the board alive.</p>' +
             '<button class="btn primary" data-action="replay">Try again</button>' +
-            '<button class="btn" data-action="undo">Undo last move &nbsp;&#9819; ' + COSTS.undo + '</button>' +
+            '<button class="btn" data-action="undo">Undo last move</button>' +
             '<button class="btn ghost" data-action="menu">Menu</button>'
         );
     }
@@ -556,10 +823,10 @@
     function showStuck() {
         openOverlay(
             '<h2>No moves left</h2>' +
-            '<p>Nothing on the board can be stacked. A joker starts a new stack ' +
-            'anywhere, or you can take a move back.</p>' +
-            '<button class="btn primary" data-action="wild">Joker &nbsp;&#9819; ' + COSTS.wild + '</button>' +
-            '<button class="btn" data-action="undo">Undo &nbsp;&#9819; ' + COSTS.undo + '</button>' +
+            '<p>Nothing can be placed and the row is jammed. A joker starts a ' +
+            'column anywhere, or you can take a move back.</p>' +
+            '<button class="btn primary" data-action="wild">Take the joker</button>' +
+            '<button class="btn" data-action="undo">Undo</button>' +
             '<button class="btn ghost" data-action="replay">Restart level</button>'
         );
     }
@@ -573,8 +840,8 @@
         }).join('');
         openOverlay(
             '<h2>Word Solitaire</h2>' +
-            '<p>Stack a word on another word from the same category. Fill a category ' +
-            'and the whole group locks in and clears the column.</p>' +
+            '<p>Open a category in one of the four slots, then send it every word ' +
+            'that belongs to it.</p>' +
             '<div class="levels">' + levels + '</div>' +
             '<button class="btn primary" data-action="close">Resume</button>' +
             '<button class="btn" data-action="replay">Restart level</button>' +
@@ -587,15 +854,18 @@
         openOverlay(
             '<h2>How to play</h2>' +
             '<ul class="help">' +
-            '<li>Tap a column to pick up the group of same-category cards on top of it.</li>' +
-            '<li>Tap another column to drop them. A drop is legal only on an empty ' +
-            'column or on a card from the same category.</li>' +
-            '<li>Once every word of a category sits in one column the group locks in, ' +
-            'clears, and pays out coins.</li>' +
-            '<li>Uncovering a face-down card turns it over for free. Every drop costs ' +
-            'one move — clear the board before the counter runs out.</li>' +
-            '<li>Stuck? A hint points at the best move, undo takes one back, and the ' +
-            'joker lets a group start a stack anywhere.</li>' +
+            '<li><b>Open a category.</b> A card like <i>Greek 0/3</i> is a category ' +
+            'card: move it into one of the four slots and that category starts ' +
+            'collecting. Only four run at once.</li>' +
+            '<li><b>Send words home.</b> Tap a word, then tap its slot. Kappa goes ' +
+            'to Greek, Toronto goes to Cities — nothing else is accepted.</li>' +
+            '<li><b>Use the columns.</b> Stack a word on another word of the same ' +
+            'category to keep it handy; the whole group then moves in one go. Any ' +
+            'card can go on an empty column.</li>' +
+            '<li><b>Draw when stuck.</b> The deck deals into the row beside it, ' +
+            'which holds three cards. Park a card there to dig, but keep it clear.</li>' +
+            '<li>Filling a category clears its slot for the next one. Every action ' +
+            'costs a move — empty the table before the counter runs out.</li>' +
             '</ul>' +
             '<button class="btn primary" data-action="close">Got it</button>'
         );
@@ -603,10 +873,125 @@
 
     /* --------------------------------------------------------------- events */
 
-    boardEl.addEventListener('click', function (event) {
-        var col = event.target.closest('.col');
-        if (col) onColumn(parseInt(col.getAttribute('data-index'), 10));
-    });
+    var drag = null;
+
+    function zoneAt(x, y) {
+        var el = document.elementFromPoint(x, y);
+        var holder = el && el.closest ? el.closest('[data-zone]') : null;
+        if (!holder) return null;
+        return {
+            zone: holder.getAttribute('data-zone'),
+            index: parseInt(holder.getAttribute('data-index'), 10),
+            el: holder
+        };
+    }
+
+    function markTargets(cards, from) {
+        destinations().forEach(function (to) {
+            if (from.zone === to.zone && from.index === to.index) return;
+            if (!canDrop(cards, to, state.wild)) return;
+            var el = zoneEl(to.zone, to.index);
+            if (el) el.classList.add('drop-ok');
+        });
+    }
+
+    function clearTargets() {
+        Array.prototype.forEach.call(document.querySelectorAll('.drop-ok, .drop-over'), function (el) {
+            el.classList.remove('drop-ok');
+            el.classList.remove('drop-over');
+        });
+    }
+
+    function moveGhost(x, y) {
+        drag.ghost.style.transform = 'translate(' + (x + drag.dx) + 'px,' + (y + drag.dy) + 'px)';
+    }
+
+    function onDragStart(event) {
+        if (state.over || drag) return;
+        if (event.button && event.button !== 0) return;
+        var holder = event.target.closest ? event.target.closest('[data-zone]') : null;
+        if (!holder) return;
+        var zone = holder.getAttribute('data-zone');
+        var index = parseInt(holder.getAttribute('data-index'), 10);
+        clearHints();
+
+        if (zone === 'stock') {
+            drawCard();
+            return;
+        }
+
+        var cards = pickable(zone, index);
+        if (!cards.length) {
+            if (zone === 'tableau' && state.tableau[index].length) toast('That card is face down.');
+            return;
+        }
+
+        var cardEls = holder.querySelectorAll('.card');
+        var first = cardEls[cardEls.length - cards.length];
+        var rect = first.getBoundingClientRect();
+
+        var ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        ghost.style.width = rect.width + 'px';
+        ghost.innerHTML = cards.map(function (card, i) {
+            return cardFace(card, { style: 'top:calc(var(--fu) * ' + i + ')' });
+        }).join('');
+        document.body.appendChild(ghost);
+
+        drag = {
+            from: { zone: zone, index: index },
+            cards: cards,
+            ghost: ghost,
+            dx: rect.left - event.clientX,
+            dy: rect.top - event.clientY,
+            x: event.clientX,
+            y: event.clientY,
+            moved: false
+        };
+        moveGhost(event.clientX, event.clientY);
+        for (var i = cardEls.length - cards.length; i < cardEls.length; i++) {
+            cardEls[i].classList.add('dragging');
+        }
+        markTargets(cards, drag.from);
+        document.addEventListener('pointermove', onDragMove);
+        document.addEventListener('pointerup', onDragEnd);
+        document.addEventListener('pointercancel', onDragEnd);
+        event.preventDefault();
+    }
+
+    function onDragMove(event) {
+        if (!drag) return;
+        if (Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) > 6) drag.moved = true;
+        moveGhost(event.clientX, event.clientY);
+        Array.prototype.forEach.call(document.querySelectorAll('.drop-over'), function (el) {
+            el.classList.remove('drop-over');
+        });
+        var over = zoneAt(event.clientX, event.clientY);
+        if (over && over.el.classList.contains('drop-ok')) over.el.classList.add('drop-over');
+    }
+
+    function onDragEnd(event) {
+        if (!drag) return;
+        document.removeEventListener('pointermove', onDragMove);
+        document.removeEventListener('pointerup', onDragEnd);
+        document.removeEventListener('pointercancel', onDragEnd);
+        var current = drag;
+        drag = null;
+        current.ghost.parentNode.removeChild(current.ghost);
+        clearTargets();
+
+        if (!current.moved) {                       // a tap, not a drag
+            if (!autoMove(current.from)) render();
+            return;
+        }
+        var over = zoneAt(event.clientX, event.clientY);
+        if (over && !(over.zone === current.from.zone && over.index === current.from.index)) {
+            moveCards(current.from, { zone: over.zone, index: over.index });
+        }
+        render();
+    }
+
+    document.addEventListener('pointerdown', onDragStart);
 
     document.getElementById('tool-hint').addEventListener('click', useHint);
     document.getElementById('tool-undo').addEventListener('click', useUndo);
@@ -632,13 +1017,9 @@
     });
 
     document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') {
-            if (overlayEl.classList.contains('show')) {
-                if (!state.over) closeOverlay();
-            } else if (state.selection !== null) {
-                state.selection = null;
-                render();
-            }
+        if (event.key !== 'Escape') return;
+        if (overlayEl.classList.contains('show')) {
+            if (!state.over) closeOverlay();
         }
     });
 
@@ -646,7 +1027,10 @@
     window.WordSolitaire = {
         state: function () { return state; },
         newGame: newGame,
-        tapColumn: onColumn,
+        move: moveCards,
+        autoMove: autoMove,
+        draw: drawCard,
+        legalMoves: legalMoves,
         deal: function (levelIndex) {
             return buildDeal(LEVELS[levelIndex], mulberry32((Math.random() * 4294967296) >>> 0));
         }
