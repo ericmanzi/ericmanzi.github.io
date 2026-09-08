@@ -43,8 +43,9 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
 - `index.html` is a static landing page; `game.html` is the playable game
 - Vanilla JS, no framework and no build step: `levels.js` holds the categories
   and level definitions, `game.js` holds the engine and rendering
-- Four zones: a stock that deals into a three-card row, four foundation slots,
-  and four tableau columns. A crowned category card (`Greek 0/3`) opens a slot;
+- Two rows of card slots: four foundation slots above four tableau stacks. The
+  stock sits beside the moves ribbon and deals face-up cards into the space to
+  its left, up to three at a time; that space shows nothing until it does. A crowned category card (`Greek 0/3`) opens a slot;
   that category's words then collect on it. Only crowned cards open slots, and
   the row only ever fills from the deck
 - Tableau columns are working space: words of one category stack on each other

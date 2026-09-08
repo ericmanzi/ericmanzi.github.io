@@ -709,13 +709,13 @@
     }
 
     function renderRow() {
+        // Cards dealt from the deck sit beside it. There are no empty slots to
+        // show: until the deck deals, that space is simply table.
         var html = '';
-        for (var i = 0; i < ROW_SLOTS; i++) {
-            var card = state.row[i];
+        state.row.forEach(function (card, i) {
             html += '<div class="rowslot" data-zone="row" data-index="' + i + '">' +
-                (card ? cardFace(card) : '<div class="hole"></div>') +
-                '</div>';
-        }
+                cardFace(card) + '</div>';
+        });
         rowEl.innerHTML = html;
         stockEl.innerHTML = state.stock.length
             ? '<div class="card facedown"><span class="stockcount">' + state.stock.length + '</span></div>'
