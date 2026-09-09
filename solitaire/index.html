@@ -58,29 +58,17 @@
             padding: 18px 0 6px;
         }
 
-        .coin-chip {
+        .brand {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-            background: rgba(0, 0, 0, 0.32);
-            border-radius: 999px;
-            padding: 6px 18px 6px 6px;
+            gap: 8px;
             font-weight: 700;
-            font-size: 18px;
-            letter-spacing: 0.5px;
+            font-size: 15px;
+            letter-spacing: 0.3px;
+            color: rgba(255, 255, 255, 0.9);
         }
 
-        .coin {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            background: radial-gradient(circle at 35% 30%, #ffe08a, var(--gold) 55%, var(--gold-dark));
-            border: 2px solid #fff;
-            display: grid;
-            place-items: center;
-            font-size: 15px;
-            color: #8a5f10;
-        }
+        .brand .crown { color: var(--gold); font-size: 18px; }
 
         .home-link {
             text-decoration: none;
@@ -316,6 +304,15 @@
         }
 
         /* ---------- tool row ---------- */
+        .tools-note {
+            text-align: center;
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: rgba(255, 255, 255, 0.8);
+            max-width: 420px;
+            margin: -8px auto 20px;
+        }
+
         .tools {
             display: flex;
             justify-content: center;
@@ -372,10 +369,7 @@
 
     <div class="wrap">
         <div class="topbar">
-            <div class="coin-chip">
-                <span class="coin">&#9819;</span>
-                <span>2303</span>
-            </div>
+            <div class="brand"><span class="crown">&#9819;</span> Word Solitaire</div>
             <a class="home-link" href="/">&larr; ericmanzi.github.io</a>
         </div>
 
@@ -383,22 +377,22 @@
             <h1>Word <span>Solitaire</span></h1>
             <p class="tagline">
                 Classic solitaire pacing, played with words instead of suits.
-                A card only stacks on another from the same category — group every
-                set on the table before the moves run out.
+                Open a category, then find every word that belongs to it — and
+                empty the table before the moves run out.
             </p>
         </header>
 
         <div class="fan">
             <div class="card facedown"></div>
-            <div class="card"><span class="count">2/5</span><span class="tag">Greek</span>Kappa</div>
-            <div class="card crowned"><span class="count">1/5</span>Dynamics</div>
-            <div class="card"><span class="count">1/5</span><span class="tag">Robots</span>Robovac</div>
+            <div class="card">Kappa</div>
+            <div class="card crowned"><span class="count">0/3</span><span class="tag">Greek</span>Greek</div>
+            <div class="card">Sigma</div>
             <div class="card facedown"></div>
         </div>
 
         <div class="cta">
             <a class="play-btn" href="game.html">Play</a>
-            <p class="cta-note">Free, no sign-in — six levels, straight in your browser.</p>
+            <p class="cta-note">Free, no sign-in, no ads — six levels, straight in your browser.</p>
         </div>
 
         <div class="stats">
@@ -413,51 +407,50 @@
             <div class="steps">
                 <div class="step">
                     <div class="num">1</div>
-                    <h3>Pick up a group</h3>
-                    <p>Tap a column to lift the run of same-category cards sitting on top of it — one card, or six.</p>
+                    <h3>Open a category</h3>
+                    <p>Cards wearing a crown — <i>Greek 0/3</i>, <i>Robots 0/6</i> — are category cards. Drag one into a crowned slot and it starts collecting. Only four run at a time.</p>
                 </div>
                 <div class="step">
                     <div class="num">2</div>
-                    <h3>Stack by category</h3>
-                    <p>Drop it on a word from the same category. Toronto goes on Chicago, Relax goes on Chill — nothing else is allowed.</p>
+                    <h3>Send words home</h3>
+                    <p>Drag a word onto its slot. Kappa belongs to Greek, Toronto to Cities — a slot takes nothing else.</p>
                 </div>
                 <div class="step">
                     <div class="num">3</div>
-                    <h3>Use the empty columns</h3>
-                    <p>A blank column takes any group, so it can park an odd card or start a category from scratch. Uncovered cards flip for free.</p>
+                    <h3>Stack in the columns</h3>
+                    <p>Words of one category stack on each other in the tableau and then travel as a group. Any card can start an empty column. Uncovered cards flip for free.</p>
                 </div>
                 <div class="step">
                     <div class="num">4</div>
-                    <h3>Complete the set</h3>
-                    <p>Gather every word of a category in one column and the group locks in, clears, and pays out. Empty the board before the moves run out.</p>
+                    <h3>Draw when stuck</h3>
+                    <p>The deck deals into the row beside it, three cards wide. Fill a category to clear its slot for the next, and empty the table before the move counter runs out.</p>
                 </div>
             </div>
         </section>
 
         <section>
-            <h2>Spend your coins</h2>
+            <h2>When you get stuck</h2>
+            <p class="tools-note">Three hints, five undos and one joker per level — the
+            allowance refills every time a board is dealt.</p>
             <div class="tools">
                 <div class="tool">
                     <div class="icon">&#128161;</div>
                     <div class="name">Hint</div>
-                    <div class="cost">&#9819; 1100</div>
                 </div>
                 <div class="tool">
                     <div class="icon">&#8630;</div>
                     <div class="name">Undo</div>
-                    <div class="cost">&#9819; 600</div>
                 </div>
                 <div class="tool gold">
                     <div class="icon">&#127183;</div>
                     <div class="name">Joker</div>
-                    <div class="cost">&#9819; 2250</div>
                 </div>
             </div>
         </section>
 
         <footer>
-            No accounts, no servers — the whole game runs in your browser and your
-            progress is kept on this device.
+            No accounts, no servers, no coins — the whole game runs in your browser
+            and your progress is kept on this device.
             <br>
             Built by <a href="/">Eric Manzi</a>.
         </footer>
