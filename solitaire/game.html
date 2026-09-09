@@ -130,27 +130,69 @@
         .ribbon .value { font-size: 22px; font-weight: 800; line-height: 1.1; }
         .ribbon .value.low { color: #ffd0d0; }
 
-        .row {
-            display: flex;
-            gap: var(--gap);
+        .waste {
+            position: relative;
             flex: 1 1 auto;
             min-width: 0;
+            height: calc(var(--card-h) * 0.86);
+            display: flex;
+            align-items: flex-start;
             justify-content: flex-end;
         }
 
-        .rowslot, .stock, .fslot { position: relative; }
+        /* The top card sits proud on the left; older ones peek out behind it,
+           turned on their side, so you can see what dealing has buried. */
+        .wastecard {
+            position: relative;
+            height: 100%;
+            flex: none;
+        }
+
+        .wastecard.top { width: calc(var(--card-w) * 0.86); z-index: 2; }
+
+        .wastecard.peek { width: 24px; margin-left: -3px; }
+
+        .peekcard {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            background: var(--card);
+            border: 2px solid var(--card-edge);
+            box-shadow: 2px 3px 6px rgba(0, 0, 0, 0.2);
+            display: grid;
+            place-items: center;
+            writing-mode: vertical-rl;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            color: var(--ink);
+            overflow: hidden;
+            padding: 4px 0;
+        }
+
+        .peekcard.catcard { border-color: var(--gold); }
+
+        .wastemore {
+            order: 9;
+            align-self: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.7);
+            margin-left: 4px;
+        }
+
+        .stock, .fslot { position: relative; }
         .fslot { width: var(--card-w); height: var(--card-h); }
 
-        .rowslot, .stock {
+        .stock {
             width: calc(var(--card-w) * 0.86);
             height: calc(var(--card-h) * 0.86);
+            flex: none;
             cursor: pointer;
         }
 
-        .rowslot { flex: 0 1 calc(var(--card-w) * 0.86); min-width: 0; }
-
         /* Cards fill whatever slot holds them; only the tableau uses the base size. */
-        .rowslot .card, .stock .card, .fslot .card { width: 100%; height: 100%; }
+        .wastecard.top .card, .stock .card, .fslot .card { width: 100%; height: 100%; }
 
         .hole {
             position: absolute;
@@ -166,7 +208,14 @@
 
         .stock { flex: none; margin-left: var(--gap); }
         .stock .card { cursor: pointer; }
-        .stock .hole.empty-stock { border-style: solid; opacity: 0.5; }
+        .stock .hole.empty-stock { opacity: 0.4; }
+
+        /* With the stock empty, it becomes the button that turns the pile back. */
+        .stock .hole.recycle {
+            color: rgba(255, 255, 255, 0.55);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            font-size: 26px;
+        }
 
         .stockcount {
             position: absolute;
@@ -317,7 +366,7 @@
             background: rgba(242, 193, 78, 0.16);
         }
 
-        .col, .rowslot, .fslot, .stock { touch-action: none; }
+        .col, .wastecard, .fslot, .stock { touch-action: none; }
 
         .card.catcard {
             border-color: var(--gold);
@@ -575,7 +624,7 @@
                 <div class="label">Moves</div>
                 <div class="value" id="moves">0</div>
             </div>
-            <div class="row" id="row"></div>
+            <div class="waste" id="waste"></div>
             <div class="stock" id="stock" data-zone="stock" data-index="0"></div>
         </div>
 

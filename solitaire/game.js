@@ -2,17 +2,19 @@
    No backend: the board lives in memory, coins and level progress in
    localStorage. Depends on CATEGORIES and LEVELS from levels.js.
 
-   The board has four zones. The stock deals face-up cards into the row
-   beside it; that row is your holding space, a few slots wide. Four
-   foundation slots each hold one category, opened by that category's card
-   and filled with its words. The four tableau columns are working space:
-   words of one category stack on each other there and travel as a group. */
+   The board has four zones. The stock deals face-up cards, one per tap and
+   as many as you like, onto the unplaced pile beside it; only the card on
+   top of that pile is in play, and when the stock runs dry the pile can be
+   turned back into it. Four foundation slots each hold one category, opened
+   by that category's card and filled with its words. The four tableau
+   columns are working space: words of one category stack on each other
+   there and travel as a group. */
 
 (function () {
     'use strict';
 
     var LIMITS = { hint: 3, undo: 5, wild: 1 };   // per level, refilled on a new deal
-    var ROW_SLOTS = 3;          // the row the deck deals into
+    var WASTE_PEEK = 3;         // how many of the unplaced pile stay in view
     var SLOTS = 4;              // foundation slots
     var COLUMNS = 4;            // tableau columns
     var KEY_PROGRESS = 'wordSolitaire.progress';
@@ -86,7 +88,7 @@
     }
 
     function cardsLeft() {
-        var total = state.stock.length + state.row.length;
+        var total = state.stock.length + state.waste.length;
         state.tableau.forEach(function (column) { total += column.length; });
         return total;
     }
@@ -135,7 +137,7 @@
 
     function simulate(level, layout, pool) {
         var tableau = layout.map(function (column) { return column.map(cloneCard); });
-        var row = [];
+        var waste = [];
         var piles = [];
         var open = {};
         var finished = {};
@@ -149,7 +151,7 @@
         function freeSlot() { return piles.indexOf(null); }
 
         function empty() {
-            return !left.length && !row.length && tableau.every(function (c) { return !c.length; });
+            return !left.length && !waste.length && tableau.every(function (c) { return !c.length; });
         }
 
         function collect(cards) {
@@ -178,7 +180,7 @@
             tableau.forEach(function (column) {
                 column.forEach(function (card) { if (card.cat === catId && card.kind === 'word') n++; });
             });
-            row.forEach(function (card) { if (card.cat === catId && card.kind === 'word') n++; });
+            waste.forEach(function (card) { if (card.cat === catId && card.kind === 'word') n++; });
             return n;
         }
 
@@ -202,14 +204,12 @@
             }
             if (acted) continue;
 
-            // 2. Then from the row the deck deals into.
-            for (i = 0; i < row.length && !acted; i++) {
-                if (row[i].kind === 'word' && open.hasOwnProperty(row[i].cat)) {
-                    collect(row.splice(i, 1));
-                    acted = true;
-                }
+            // 2. Then the top of the unplaced pile, the only card of it in play.
+            var lid = waste.length ? waste[waste.length - 1] : null;
+            if (lid && lid.kind === 'word' && open.hasOwnProperty(lid.cat)) {
+                collect(waste.splice(waste.length - 1, 1));
+                continue;
             }
-            if (acted) continue;
 
             // 3. Open a category with a card that is already in reach.
             if (freeSlot() >= 0) {
@@ -224,22 +224,21 @@
                         acted = true;
                     }
                 }
-                for (i = 0; i < row.length && !acted; i++) {
-                    card = row[i];
-                    if (card.kind === 'cat' && !finished[card.cat] && !open.hasOwnProperty(card.cat)) {
-                        row.splice(i, 1);
-                        openCategory(card);
-                        acted = true;
-                    }
+                if (!acted && lid && lid.kind === 'cat' && !finished[lid.cat] &&
+                        !open.hasOwnProperty(lid.cat)) {
+                    waste.pop();
+                    openCategory(lid);
+                    acted = true;
                 }
                 if (acted) continue;
             }
 
-            // 4. Draw. The dealer picks a card the player can use right now.
-            if (left.length && row.length < ROW_SLOTS) {
+            // 4. Deal. The dealer hands over a card the player can use at once,
+            //    so the pile never grows a lid nothing can lift.
+            if (left.length) {
                 var pick = -1;
-                for (i = 0; i < left.length; i++) {
-                    if (left[i].kind === 'word' && open.hasOwnProperty(left[i].cat)) { pick = i; break; }
+                for (i = 0; i < left.length && pick < 0; i++) {
+                    if (left[i].kind === 'word' && open.hasOwnProperty(left[i].cat)) pick = i;
                 }
                 if (pick < 0 && freeSlot() >= 0) {
                     var best = -1;
@@ -249,22 +248,30 @@
                         if (score > best) { best = score; pick = i; }
                     }
                 }
+                if (pick < 0) {           // else one that can at least be stacked
+                    for (i = 0; i < left.length && pick < 0; i++) {
+                        if (left[i].kind !== 'word') continue;
+                        for (t = 0; t < tableau.length && pick < 0; t++) {
+                            var lip = tableau[t].length ? tableau[t][tableau[t].length - 1] : null;
+                            if (!tableau[t].length || (lip.faceUp && lip.kind === 'word' && lip.cat === left[i].cat)) pick = i;
+                        }
+                    }
+                }
                 if (pick < 0) pick = 0;
                 card = left.splice(pick, 1)[0];
                 card.faceUp = true;
                 stock.push(card);
-                row.push(card);
+                waste.push(card);
                 moves++;
                 continue;
             }
 
-            // 5. Unload the row onto a column of the same category.
-            for (i = 0; i < row.length && !acted; i++) {
-                if (row[i].kind !== 'word') continue;
+            // 5. Unload the pile's top card onto a column of the same category.
+            if (lid && lid.kind === 'word') {
                 for (t = 0; t < tableau.length && !acted; t++) {
                     var head = tableau[t].length ? tableau[t][tableau[t].length - 1] : null;
-                    if (!head || !head.faceUp || head.kind !== 'word' || head.cat !== row[i].cat) continue;
-                    tableau[t].push(row.splice(i, 1)[0]);
+                    if (!head || !head.faceUp || head.kind !== 'word' || head.cat !== lid.cat) continue;
+                    tableau[t].push(waste.pop());
                     moves++;
                     acted = true;
                 }
@@ -279,8 +286,8 @@
                     if (d === t) continue;
                     var onto = tableau[d];
                     if (!onto.length) continue;
-                    var lid = onto[onto.length - 1];
-                    if (!lid.faceUp || lid.kind !== 'word' || lid.cat !== dig[0].cat) continue;
+                    var cap = onto[onto.length - 1];
+                    if (!cap.faceUp || cap.kind !== 'word' || cap.cat !== dig[0].cat) continue;
                     tableau[t].splice(tableau[t].length - dig.length, dig.length);
                     flipTop(tableau[t]);
                     tableau[d] = onto.concat(dig);
@@ -291,10 +298,10 @@
             if (acted) continue;
 
             // 7. Last resort: an empty column will take anything.
-            for (i = 0; i < row.length && !acted; i++) {
+            if (lid) {
                 for (t = 0; t < tableau.length && !acted; t++) {
                     if (tableau[t].length) continue;
-                    tableau[t].push(row.splice(i, 1)[0]);
+                    tableau[t].push(waste.pop());
                     moves++;
                     acted = true;
                 }
@@ -345,7 +352,9 @@
                     return card;
                 }).reverse(),                          // drawn from the end
                 solution: plan.moves,
-                moveLimit: Math.round(plan.moves * (1 + level.slack)),
+                // The dealer never has to turn the pile back, but a player who
+                // buries a card does, so the budget funds one more pass.
+                moveLimit: Math.round(plan.moves * (1 + level.slack)) + plan.stock.length,
                 attempts: attempt + 1
             };
         }
@@ -364,7 +373,7 @@
             levelIndex: levelIndex,
             level: level,
             stock: deal.stock,
-            row: [],
+            waste: [],
             foundations: foundations,
             tableau: deal.tableau,
             completed: [],
@@ -383,7 +392,7 @@
     function snapshot() {
         state.history.push(JSON.parse(JSON.stringify({
             stock: state.stock,
-            row: state.row,
+            waste: state.waste,
             foundations: state.foundations,
             tableau: state.tableau,
             completed: state.completed,
@@ -392,20 +401,36 @@
         if (state.history.length > 250) state.history.shift();
     }
 
+    /* One tap deals one card, as many times as the stock lasts. A card you
+       cannot use just stays on the pile and the next one covers it. */
     function drawCard() {
         if (state.over) return;
         if (!state.stock.length) {
-            toast('The deck is empty.');
-            return;
-        }
-        if (state.row.length >= ROW_SLOTS) {
-            toast('No room in the row — place a card first.');
+            recycle();
             return;
         }
         snapshot();
         var card = state.stock.pop();
         card.faceUp = true;
-        state.row.push(card);
+        state.waste.push(card);
+        state.moves--;
+        render();
+        checkEnd();
+    }
+
+    /* With the stock empty, the unplaced pile goes back into it in the order
+       it was dealt, ready for another pass. */
+    function recycle() {
+        if (state.over) return;
+        if (state.stock.length) return;
+        if (!state.waste.length) {
+            toast('Nothing left to deal.');
+            return;
+        }
+        snapshot();
+        state.stock = state.waste.reverse();
+        state.stock.forEach(function (card) { card.faceUp = false; });
+        state.waste = [];
         state.moves--;
         render();
         checkEnd();
@@ -413,7 +438,7 @@
 
     function pickable(zone, index) {
         if (zone === 'tableau') return state.tableau[index] ? topRun(state.tableau[index]) : [];
-        if (zone === 'row') return state.row[index] ? [state.row[index]] : [];
+        if (zone === 'waste') return state.waste.length ? [state.waste[state.waste.length - 1]] : [];
         return [];
     }
 
@@ -425,7 +450,7 @@
             flipTop(column);
             return run;
         }
-        return state.row.splice(from.index, 1);
+        return state.waste.splice(state.waste.length - 1, 1);
     }
 
     function destinations() {
@@ -446,7 +471,7 @@
     }
 
     function rejection(cards, to) {
-        if (to.zone === 'row') return 'The row only takes cards dealt from the deck.';
+        if (to.zone === 'waste') return 'The unplaced pile only takes cards from the deck.';
         if (to.zone === 'foundation') {
             var pile = state.foundations[to.index];
             if (!pile) return 'Only a crowned category card can open a slot.';
@@ -504,9 +529,9 @@
             var run = topRun(column);
             if (run.length) list.push({ zone: 'tableau', index: index, cards: run });
         });
-        state.row.forEach(function (card, index) {
-            list.push({ zone: 'row', index: index, cards: [card] });
-        });
+        if (state.waste.length) {
+            list.push({ zone: 'waste', index: 0, cards: [state.waste[state.waste.length - 1]] });
+        }
         return list;
     }
 
@@ -537,7 +562,7 @@
             return score;
         }
         score = 40 + cards.length;
-        if (move.from.zone === 'row') score += 10;                        // frees a slot
+        if (move.from.zone === 'waste') score += 10;                      // uncovers the pile
         if (move.from.zone === 'tableau') {
             var column = state.tableau[move.from.index];
             if (column.length === cards.length) score += 15;              // empties a column
@@ -564,8 +589,15 @@
             showLose();
             return;
         }
-        var canDraw = state.stock.length && state.row.length < ROW_SLOTS;
-        if (!canDraw && !legalMoves().length) showStuck();
+        // Dealing and recycling shuffle the same cards around, so the board is
+        // only truly stuck when nothing on it can be placed and nothing still
+        // to come can be either.
+        if (legalMoves().length) return;
+        var undealt = state.stock.concat(state.waste.slice(0, -1));
+        var help = undealt.some(function (card) {
+            return destinations().some(function (to) { return canDrop([card], to, false); });
+        });
+        if (!help) showStuck();
     }
 
     /* -------------------------------------------------------------- power-ups */
@@ -600,7 +632,7 @@
         state.tools.undo--;
         var previous = state.history.pop();
         state.stock = previous.stock;
-        state.row = previous.row;
+        state.waste = previous.waste;
         state.foundations = previous.foundations;
         state.tableau = previous.tableau;
         state.completed = previous.completed;
@@ -632,7 +664,7 @@
     /* ---------------------------------------------------------------- render */
 
     var boardEl = document.getElementById('board');
-    var rowEl = document.getElementById('row');
+    var wasteEl = document.getElementById('waste');
     var stockEl = document.getElementById('stock');
     var foundationsEl = document.getElementById('foundations');
     var movesEl = document.getElementById('moves');
@@ -657,7 +689,7 @@
 
     function render() {
         renderHeader();
-        renderRow();
+        renderWaste();
         renderFoundations();
         renderTableau();
         renderTools();
@@ -685,18 +717,31 @@
         dotsEl.innerHTML = dots;
     }
 
-    function renderRow() {
-        // Cards dealt from the deck sit beside it. There are no empty slots to
-        // show: until the deck deals, that space is simply table.
+    /* The pile shows its top card in full with the next couple peeking out
+       behind it, so you can see what dealing has buried. */
+    function renderWaste() {
         var html = '';
-        state.row.forEach(function (card, i) {
-            html += '<div class="rowslot" data-zone="row" data-index="' + i + '">' +
-                cardFace(card) + '</div>';
+        var shown = state.waste.slice(-WASTE_PEEK);
+        shown.forEach(function (card, i) {
+            var age = shown.length - 1 - i;          // 0 is the card on top
+            if (!age) {
+                html += '<div class="wastecard top" data-zone="waste" data-index="0" style="order:0">' +
+                    cardFace(card) + '</div>';
+                return;
+            }
+            html += '<div class="wastecard peek" style="order:' + age + '">' +
+                '<div class="peekcard' + (card.kind === 'cat' ? ' catcard' : '') + '">' +
+                card.word + '</div></div>';
         });
-        rowEl.innerHTML = html;
+        if (state.waste.length > WASTE_PEEK) {
+            html += '<div class="wastemore">+' + (state.waste.length - WASTE_PEEK) + '</div>';
+        }
+        wasteEl.innerHTML = html;
+
         stockEl.innerHTML = state.stock.length
             ? '<div class="card facedown"><span class="stockcount">' + state.stock.length + '</span></div>'
-            : '<div class="hole empty-stock"></div>';
+            : '<div class="hole' + (state.waste.length ? ' recycle' : ' empty-stock') + '">' +
+              (state.waste.length ? '&#8635;' : '') + '</div>';
     }
 
     function renderFoundations() {
@@ -879,9 +924,12 @@
             '<li><b>Use the columns.</b> Drag a word onto another word of the same ' +
             'category to keep it handy; the whole group then moves in one go. Any ' +
             'card can go on an empty column.</li>' +
-            '<li><b>Draw when stuck.</b> Tap the deck and it deals a card into the ' +
-            'row beside it, which holds three. Nothing can be put back there, so ' +
-            'keep that row moving.</li>' +
+            '<li><b>Deal when stuck.</b> Tap the deck as often as you like. Each ' +
+            'card lands on the unplaced pile beside it, and only the card on top ' +
+            'of that pile is in play — the ones behind it are waiting.</li>' +
+            '<li><b>Turn the pile back.</b> When the deck runs out, tap it once ' +
+            'more and the whole unplaced pile becomes the deck again, in the same ' +
+            'order, ready for another pass.</li>' +
             '<li>Filling a category clears its slot for the next one. Every action ' +
             'costs a move — empty the table before the counter runs out.</li>' +
             '</ul>' +
