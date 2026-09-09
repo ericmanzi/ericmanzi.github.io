@@ -39,7 +39,7 @@
 
     function catSize(catId) { return CATEGORIES[catId].words.length; }
 
-    /* What a tap on a column picks up: the face-up run of same-category word
+    /* What dragging a column picks up: the face-up run of same-category word
        cards on top of it, or a single category card. */
     function topRun(column) {
         if (!column.length) return [];
@@ -485,29 +485,6 @@
         return true;
     }
 
-    /* Tapping a card instead of dragging it sends it to the best home. */
-    function autoMove(from) {
-        if (state.over) return false;
-        var cards = pickable(from.zone, from.index);
-        if (!cards.length) return false;
-        var best = null;
-        var bestScore = -1;
-        destinations().forEach(function (to) {
-            if (from.zone === to.zone && from.index === to.index) return;
-            if (!canDrop(cards, to, state.wild)) return;
-            var score = scoreMove({ from: { zone: from.zone, index: from.index, cards: cards }, to: to });
-            if (score > bestScore) {
-                bestScore = score;
-                best = to;
-            }
-        });
-        if (!best) {
-            toast('Nowhere to put that yet.');
-            return false;
-        }
-        return moveCards(from, best);
-    }
-
     /* A foundation holding every word of its category locks in, clears the
        slot for the next category, and pays out. */
     function resolveCompletions() {
@@ -892,16 +869,19 @@
         openOverlay(
             '<h2>How to play</h2>' +
             '<ul class="help">' +
+            '<li><b>Everything moves by dragging.</b> Drag a card, or a group of ' +
+            'them, from where it is to where it belongs.</li>' +
             '<li><b>Open a category.</b> A card like <i>Greek 0/3</i> is a category ' +
-            'card: move it into one of the four slots and that category starts ' +
+            'card: drag it into one of the four slots and that category starts ' +
             'collecting. Only four run at once.</li>' +
-            '<li><b>Send words home.</b> Tap a word, then tap its slot. Kappa goes ' +
+            '<li><b>Send words home.</b> Drag a word onto its slot. Kappa goes ' +
             'to Greek, Toronto goes to Cities — nothing else is accepted.</li>' +
-            '<li><b>Use the columns.</b> Stack a word on another word of the same ' +
+            '<li><b>Use the columns.</b> Drag a word onto another word of the same ' +
             'category to keep it handy; the whole group then moves in one go. Any ' +
             'card can go on an empty column.</li>' +
-            '<li><b>Draw when stuck.</b> The deck deals into the row beside it, ' +
-            'which holds three cards. Park a card there to dig, but keep it clear.</li>' +
+            '<li><b>Draw when stuck.</b> Tap the deck and it deals a card into the ' +
+            'row beside it, which holds three. Nothing can be put back there, so ' +
+            'keep that row moving.</li>' +
             '<li>Filling a category clears its slot for the next one. Every action ' +
             'costs a move — empty the table before the counter runs out.</li>' +
             '</ul>' +
@@ -1018,8 +998,8 @@
         current.ghost.parentNode.removeChild(current.ghost);
         clearTargets();
 
-        if (!current.moved) {                       // a tap, not a drag
-            if (!autoMove(current.from)) render();
+        if (!current.moved) {       // a tap is not a move: put the card back
+            render();
             return;
         }
         var over = zoneAt(event.clientX, event.clientY);
@@ -1066,7 +1046,6 @@
         state: function () { return state; },
         newGame: newGame,
         move: moveCards,
-        autoMove: autoMove,
         draw: drawCard,
         legalMoves: legalMoves,
         deal: function (levelIndex) {
