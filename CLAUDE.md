@@ -79,3 +79,7 @@ Since this is a static GitHub Pages site with no build process:
 
 2. **Deployment**: Push to the `master` branch - GitHub Pages automatically serves the site
 
+3. **Pull requests**: Always open a pull request for work pushed to a branch.
+   Nothing reaches the live site until it is merged into `master`, so a branch
+   without an open PR is work the site will never show.
+
