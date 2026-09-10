@@ -25,7 +25,19 @@ var CATEGORIES = {
     spices:  { name: 'Spices',  color: '#b8742a', words: ['Cumin', 'Saffron', 'Paprika', 'Nutmeg', 'Clove'] },
     birds:   { name: 'Birds',   color: '#39916b', words: ['Falcon', 'Heron', 'Puffin', 'Magpie'] },
     fabrics: { name: 'Fabrics', color: '#a0577f', words: ['Denim', 'Velvet', 'Linen', 'Tweed'] },
-    geology: { name: 'Geology', color: '#7a6a52', words: ['Magma', 'Basalt', 'Caldera', 'Geyser'] }
+    geology: { name: 'Geology', color: '#7a6a52', words: ['Magma', 'Basalt', 'Caldera', 'Geyser'] },
+
+    /* The hard level's sets. Every one of these words has a second life in
+       another category on the same table: Rook is a bird, Swift means fast,
+       Bluff is a cliff, Cutter is a tool, Fleet is a group of ships. Picking
+       the right home is the puzzle. */
+    hardbirds: { name: 'Birds',    color: '#3f7d5a', words: ['Crane', 'Swallow', 'Kite', 'Martin', 'Swift'] },
+    chess:     { name: 'Chess',    color: '#4a4a5c', words: ['Rook', 'Bishop', 'Knight', 'Pawn', 'Castle'] },
+    poker:     { name: 'Poker',    color: '#a33b4a', words: ['Flush', 'River', 'Bluff', 'Fold', 'Ante'] },
+    landform:  { name: 'Landform', color: '#8a6f42', words: ['Mesa', 'Butte', 'Ridge', 'Crag'] },
+    fast:      { name: 'Fast',     color: '#c25e2a', words: ['Rapid', 'Fleet', 'Brisk', 'Hasty'] },
+    ships:     { name: 'Ships',    color: '#2f6f9e', words: ['Frigate', 'Cutter', 'Sloop', 'Galleon'] },
+    tools:     { name: 'Tools',    color: '#6b6b4e', words: ['Chisel', 'Auger', 'Plane', 'Rasp'] }
 };
 
 /* rows  — cards dealt into each of the four tableau columns; everything
@@ -38,5 +50,6 @@ var LEVELS = [
     { name: 'Four Slots',  cats: ['greek', 'planets', 'birds', 'boats', 'fabrics', 'big'],                 rows: 4, slack: 0.40 },
     { name: 'Deep Stacks', cats: ['rivers', 'spices', 'fabrics', 'music', 'geology', 'birds'],             rows: 4, slack: 0.35 },
     { name: 'Tight Board', cats: ['big', 'robots', 'coffee', 'dance', 'planets', 'physics'],               rows: 5, slack: 0.32 },
-    { name: 'Full Table',  cats: ['cities', 'weather', 'sticky', 'fruit', 'music', 'boats', 'spices', 'greek'], rows: 5, slack: 0.30 }
+    { name: 'Full Table',  cats: ['cities', 'weather', 'sticky', 'fruit', 'music', 'boats', 'spices', 'greek'], rows: 5, slack: 0.30 },
+    { name: 'Crossed Wires', cats: ['hardbirds', 'chess', 'poker', 'landform', 'fast', 'ships', 'tools'],    rows: 5, slack: 0.18 }
 ];
