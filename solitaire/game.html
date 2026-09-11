@@ -35,6 +35,10 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        /* A pull past the top of the page reloads it on a phone, which used to
+           cost the player their board. */
+        html, body { overscroll-behavior: none; }
+
         html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 
         body {
@@ -368,6 +372,23 @@
 
         .col, .wastecard, .fslot, .stock { touch-action: none; }
 
+        /* A crowned card on top of a column caps it: the gold lid says no more
+           cards fit here. */
+        .col.closed .card:last-child::after {
+            content: "";
+            position: absolute;
+            left: 6px;
+            right: 6px;
+            bottom: 4px;
+            height: 4px;
+            border-radius: 2px;
+            background: repeating-linear-gradient(90deg, var(--gold) 0 6px, transparent 6px 10px);
+        }
+
+        .col.closed .card:last-child {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22), 0 0 0 2px rgba(242, 193, 78, 0.55);
+        }
+
         .card.catcard {
             border-color: var(--gold);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22), inset 0 0 0 2px rgba(242, 193, 78, 0.25);
@@ -607,8 +628,8 @@
 
         .level-btn:hover { background: rgba(0, 0, 0, 0.3); }
         .level-btn .n { font-size: 16px; font-weight: 800; color: var(--gold); }
-        .level-btn.locked { opacity: 0.4; cursor: not-allowed; }
-        .level-btn.locked .n { color: rgba(255, 255, 255, 0.6); }
+        .level-btn { position: relative; }
+        .level-btn.cleared .tick { position: absolute; top: 4px; right: 6px; font-size: 10px; color: #7fd8a0; }
     </style>
 </head>
 <body>

@@ -18,6 +18,7 @@
     var SLOTS = 4;              // foundation slots
     var COLUMNS = 4;            // tableau columns
     var KEY_PROGRESS = 'wordSolitaire.progress';
+    var KEY_GAME = 'wordSolitaire.game';
 
     /* ---------------------------------------------------------------- store */
 
@@ -36,6 +37,66 @@
 
     var progress = readNumber(KEY_PROGRESS, 0);
     var state = null;
+
+    /* A phone reloads a page for all sorts of reasons — a pull on the scroll,
+       a tab coming back from the background. The board is written down after
+       every change so none of that costs a game. */
+    function saveGame() {
+        if (!state) return;
+        try {
+            if (state.over) {
+                window.localStorage.removeItem(KEY_GAME);
+                return;
+            }
+            window.localStorage.setItem(KEY_GAME, JSON.stringify({
+                version: 1,
+                levelIndex: state.levelIndex,
+                stock: state.stock,
+                waste: state.waste,
+                foundations: state.foundations,
+                tableau: state.tableau,
+                completed: state.completed,
+                moves: state.moves,
+                moveLimit: state.moveLimit,
+                solution: state.solution,
+                tools: state.tools,
+                wild: state.wild,
+                // only what the player can still undo is worth keeping
+                history: state.history.slice(-Math.max(0, state.tools.undo))
+            }));
+        } catch (err) { /* private mode, or no room */ }
+    }
+
+    function clearSave() {
+        try { window.localStorage.removeItem(KEY_GAME); } catch (err) { /* nothing to do */ }
+    }
+
+    function resumeGame() {
+        var saved;
+        try { saved = JSON.parse(window.localStorage.getItem(KEY_GAME)); } catch (err) { return false; }
+        if (!saved || saved.version !== 1) return false;
+        var level = LEVELS[saved.levelIndex];
+        if (!level || !saved.tableau || saved.tableau.length !== COLUMNS) return false;
+        if (!saved.foundations || saved.foundations.length !== SLOTS) return false;
+        state = {
+            levelIndex: saved.levelIndex,
+            level: level,
+            stock: saved.stock || [],
+            waste: saved.waste || [],
+            foundations: saved.foundations,
+            tableau: saved.tableau,
+            completed: saved.completed || [],
+            moves: saved.moves,
+            moveLimit: saved.moveLimit,
+            solution: saved.solution,
+            history: saved.history || [],
+            tools: saved.tools || { hint: LIMITS.hint, undo: LIMITS.undo, wild: LIMITS.wild },
+            wild: !!saved.wild,
+            over: null
+        };
+        render();
+        return true;
+    }
 
     /* ----------------------------------------------------------- card rules */
 
@@ -74,13 +135,17 @@
         return !!pile && pile.cat === card.cat && pile.cards.length + cards.length <= catSize(pile.cat);
     }
 
+    /* A column takes a card of the same category, and a crowned card may cap a
+       stack of its own words. Once it does, the stack is closed: a crowned card
+       is a lid, and nothing sits on a lid. */
     function canPlaceOnColumn(cards, index, wild) {
         var column = state.tableau[index];
         if (!column.length) return true;
         var top = column[column.length - 1];
         if (!top.faceUp) return false;
+        if (top.kind === 'cat') return false;          // closed, even to a joker
         if (wild) return true;
-        return top.kind === 'word' && cards[0].kind === 'word' && top.cat === cards[0].cat;
+        return top.kind === 'word' && top.cat === cards[0].cat;
     }
 
     function flipTop(column) {
@@ -477,6 +542,13 @@
             if (!pile) return 'Only a crowned category card can open a slot.';
             if (cards[0].kind === 'cat') return 'That slot is already taken.';
         }
+        if (to.zone === 'tableau') {
+            var column = state.tableau[to.index];
+            var top = column.length ? column[column.length - 1] : null;
+            if (top && top.faceUp && top.kind === 'cat') {
+                return 'That stack is closed — a crowned card is a lid. Move it off first.';
+            }
+        }
         return 'You can only stack words from the same category.';
     }
 
@@ -561,7 +633,7 @@
             if (pile.cards.length + cards.length === catSize(pile.cat)) score += 60;
             return score;
         }
-        score = 40 + cards.length;
+        score = cards[0].kind === 'cat' ? 25 : 40 + cards.length;
         if (move.from.zone === 'waste') score += 10;                      // uncovers the pile
         if (move.from.zone === 'tableau') {
             var column = state.tableau[move.from.index];
@@ -693,6 +765,7 @@
         renderFoundations();
         renderTableau();
         renderTools();
+        saveGame();
     }
 
     function renderTools() {
@@ -796,8 +869,10 @@
             var height = column.length
                 ? 'calc(var(--card-h) + var(--fd) * ' + lastFd + ' + var(--fu) * ' + lastFu + ')'
                 : 'var(--card-h)';
-            html += '<div class="col" data-zone="tableau" data-index="' + index + '" style="min-height:' +
-                height + '">' + cards + '</div>';
+            var lid = column.length ? column[column.length - 1] : null;
+            var closed = lid && lid.faceUp && lid.kind === 'cat' ? ' closed' : '';
+            html += '<div class="col' + closed + '" data-zone="tableau" data-index="' + index +
+                '" style="min-height:' + height + '">' + cards + '</div>';
         });
         boardEl.innerHTML = html;
     }
@@ -893,15 +968,15 @@
 
     function showMenu() {
         var levels = LEVELS.map(function (level, i) {
-            var locked = i > progress;
-            return '<button class="level-btn' + (locked ? ' locked' : '') + '"' +
-                (locked ? ' disabled' : ' data-action="goto" data-level="' + i + '"') + '>' +
-                '<span class="n">' + (i + 1) + '</span>' + level.name + '</button>';
+            return '<button class="level-btn' + (i < progress ? ' cleared' : '') +
+                '" data-action="goto" data-level="' + i + '">' +
+                '<span class="n">' + (i + 1) + '</span>' + level.name +
+                (i < progress ? '<span class="tick">&#10003;</span>' : '') + '</button>';
         }).join('');
         openOverlay(
             '<h2>Word Solitaire</h2>' +
             '<p>Open a category in one of the four slots, then send it every word ' +
-            'that belongs to it.</p>' +
+            'that belongs to it. Every level is open — start wherever you like.</p>' +
             '<div class="levels">' + levels + '</div>' +
             '<button class="btn primary" data-action="close">Resume</button>' +
             '<button class="btn" data-action="replay">Restart level</button>' +
@@ -924,6 +999,10 @@
             '<li><b>Use the columns.</b> Drag a word onto another word of the same ' +
             'category to keep it handy; the whole group then moves in one go. Any ' +
             'card can go on an empty column.</li>' +
+            '<li><b>A crowned card closes a stack.</b> Drop one on a stack of its ' +
+            'own words and it caps them, marked with a gold lid. Nothing can be ' +
+            'added on top after that, so move the crowned card off — to its slot, ' +
+            'usually — to open the stack back up.</li>' +
             '<li><b>Deal when stuck.</b> Tap the deck as often as you like. Each ' +
             'card lands on the unplaced pile beside it, and only the card on top ' +
             'of that pile is in play — the ones behind it are waiting.</li>' +
@@ -1096,6 +1175,7 @@
         move: moveCards,
         draw: drawCard,
         legalMoves: legalMoves,
+        checkLevels: checkLevels,
         deal: function (levelIndex) {
             return buildDeal(LEVELS[levelIndex], mulberry32((Math.random() * 4294967296) >>> 0));
         }
@@ -1104,6 +1184,6 @@
     var firstVisit = false;
     try { firstVisit = window.localStorage.getItem(KEY_PROGRESS) === null; } catch (err) { firstVisit = true; }
 
-    newGame(Math.min(progress, LEVELS.length - 1));
+    if (!resumeGame()) newGame(Math.min(progress, LEVELS.length - 1));
     if (firstVisit) showHelp();
 }());

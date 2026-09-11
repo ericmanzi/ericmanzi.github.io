@@ -52,8 +52,10 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   slot; that category's words then collect on it. Only crowned cards open
   slots, and nothing can be placed onto the unplaced pile
 - Tableau columns are working space: words of one category stack on each other
-  and move as a group. Cards are dealt face down except the card on top of each
-  column, in a staircase (4, 5, 6, 7)
+  and move as a group. A crowned card may be dropped on a stack of its own
+  words, which caps it — a crowned card is a lid, so nothing (not even a joker)
+  goes on top until it is moved off. Cards are dealt face down except the card
+  on top of each column, in a staircase (4, 5, 6, 7)
 - Filling a category clears its slot. Every action costs a move; the level is
   lost when the counter reaches zero with cards still out
 - Cards move by drag and drop only (pointer events, so mouse and touch alike).
@@ -64,11 +66,19 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   move limit is derived from that solution plus one more pass through the deck,
   which is what a player needs to reach a card they buried. The dealer reads
   only what a player can see, never the buried cards
-- Level 7 (`Crossed Wires`) is the hard one: its categories are built so that
-  every word could pass for a category also on the table — Rook is a bird as
-  well as a chess piece, Swift means fast, Bluff is a cliff, Cutter is a tool,
-  Fleet is a group of ships. Adding more like it means picking words whose
-  second home is another category in the same level
+- Twelve levels, none of them locked — any level can be started from the menu.
+  Levels 11 and 12 (`Crossed Wires`, `Double Lives`) are the hard ones: their
+  categories are built so that every word could pass for a category also on the
+  table — Rook is a bird as well as a chess piece, Swift means fast, Teal is a
+  duck as well as a colour, Palm is a tree as well as a hand. Adding more like
+  them means picking words whose second home is another category in the level
+- No word appears in two categories and no category appears in two levels, so
+  nothing repeats as you play. `WordSolitaire.checkLevels()` enforces that,
+  along with a category never being named after a card in its own level — run
+  it after editing `levels.js`
+- The board is written to `localStorage` after every change and restored on
+  load, so a reload (a pull-to-refresh on a phone, say) resumes the same game
+  rather than dealing a new one; the save is cleared when the level ends
 - No coins. Hint, undo and joker are capped per level (3 / 5 / 1, see `LIMITS`
   in `game.js`) and the allowance refills on a new deal; each button shows what
   is left and greys out when spent. Only level progress is stored, in
