@@ -14,6 +14,7 @@
     'use strict';
 
     var LIMITS = { hint: 3, undo: 5, wild: 1 };   // per level, refilled on a new deal
+    var RECYCLE_ALLOWANCE = 15; // spare moves for turning the pile back, at most
     var WASTE_PEEK = 3;         // how many of the unplaced pile stay in view
     var SLOTS = 4;              // foundation slots
     var COLUMNS = 4;            // tableau columns
@@ -418,8 +419,10 @@
                 }).reverse(),                          // drawn from the end
                 solution: plan.moves,
                 // The dealer never has to turn the pile back, but a player who
-                // buries a card does, so the budget funds one more pass.
-                moveLimit: Math.round(plan.moves * (1 + level.slack)) + plan.stock.length,
+                // buries a card does, so the budget funds some of a pass. A big
+                // deck would otherwise hand out a fortune in spare moves.
+                moveLimit: Math.round(plan.moves * (1 + level.slack)) +
+                    Math.min(plan.stock.length, RECYCLE_ALLOWANCE),
                 attempts: attempt + 1
             };
         }
@@ -489,7 +492,7 @@
         if (state.over) return;
         if (state.stock.length) return;
         if (!state.waste.length) {
-            toast('Nothing left to deal.');
+            toast('Nothing left to deal');
             return;
         }
         snapshot();
@@ -536,20 +539,20 @@
     }
 
     function rejection(cards, to) {
-        if (to.zone === 'waste') return 'The unplaced pile only takes cards from the deck.';
+        if (to.zone === 'waste') return 'Only the deck fills that pile';
         if (to.zone === 'foundation') {
             var pile = state.foundations[to.index];
-            if (!pile) return 'Only a crowned category card can open a slot.';
-            if (cards[0].kind === 'cat') return 'That slot is already taken.';
+            if (!pile) return 'Crowned cards open slots';
+            if (cards[0].kind === 'cat') return 'That slot is taken';
         }
         if (to.zone === 'tableau') {
             var column = state.tableau[to.index];
             var top = column.length ? column[column.length - 1] : null;
             if (top && top.faceUp && top.kind === 'cat') {
-                return 'That stack is closed — a crowned card is a lid. Move it off first.';
+                return 'Closed by its crowned card';
             }
         }
-        return 'You can only stack words from the same category.';
+        return 'Same category only';
     }
 
     function moveCards(from, to) {
@@ -677,12 +680,12 @@
     function useHint() {
         if (state.over) return;
         if (!state.tools.hint) {
-            toast('No hints left on this level.');
+            toast('No hints left');
             return;
         }
         var moves = legalMoves();
         if (!moves.length) {
-            toast(state.stock.length ? 'Nothing to place — draw a card.' : 'No legal move left.');
+            toast(state.stock.length ? 'Nothing to place — deal' : 'No legal move left');
             return;
         }
         state.tools.hint--;
@@ -694,11 +697,11 @@
 
     function useUndo() {
         if (!state.history.length) {
-            toast('Nothing to undo yet.');
+            toast('Nothing to undo');
             return;
         }
         if (!state.tools.undo) {
-            toast('No undos left on this level.');
+            toast('No undos left');
             return;
         }
         state.tools.undo--;
@@ -719,17 +722,17 @@
         if (state.wild) {                       // putting it away hands it back
             state.wild = false;
             state.tools.wild++;
-            toast('Joker put away.');
+            toast('Joker put away');
             render();
             return;
         }
         if (!state.tools.wild) {
-            toast('No jokers left on this level.');
+            toast('No jokers left');
             return;
         }
         state.tools.wild--;
         state.wild = true;
-        toast('Joker ready — your next group can start a column anywhere.');
+        toast('Joker ready — drop anywhere');
         render();
     }
 
@@ -884,7 +887,7 @@
         toastEl.textContent = message;
         toastEl.classList.add('show');
         window.clearTimeout(toastTimer);
-        toastTimer = window.setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+        toastTimer = window.setTimeout(function () { toastEl.classList.remove('show'); }, 1200);
     }
 
     function zoneEl(zone, index) {
@@ -1067,7 +1070,7 @@
 
         var cards = pickable(zone, index);
         if (!cards.length) {
-            if (zone === 'tableau' && state.tableau[index].length) toast('That card is face down.');
+            if (zone === 'tableau' && state.tableau[index].length) toast('That card is face down');
             return;
         }
 

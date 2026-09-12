@@ -419,12 +419,13 @@
 
         @keyframes pulse { from { opacity: 0.35; } to { opacity: 1; } }
 
-        .shake { animation: shake 0.32s ease; }
+        .shake { animation: shake 0.24s ease-in-out; }
 
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-6px); }
-            75% { transform: translateX(6px); }
+            20% { transform: translateX(-5px); }
+            50% { transform: translateX(4px); }
+            80% { transform: translateX(-2px); }
         }
 
         /* ---------------- tools ---------------- */
@@ -432,8 +433,7 @@
             display: flex;
             justify-content: center;
             gap: 22px;
-            margin-top: auto;
-            padding-top: 14px;
+            padding-top: 8px;
         }
 
         .tool {
@@ -508,27 +508,35 @@
         }
 
         /* ---------------- toast + overlay ---------------- */
-        .toast {
-            position: fixed;
-            left: 50%;
-            bottom: 22%;
-            transform: translate(-50%, 10px);
-            background: rgba(20, 45, 32, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            color: #fff;
-            padding: 11px 18px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 500;
-            text-align: center;
-            max-width: 82vw;
-            opacity: 0;
+        /* The toast lives in a strip of its own above the tools: small, brief,
+           never over the cards. The shake on the stack is what actually tells
+           you a move was refused. */
+        .toastrail {
+            margin-top: auto;
+            height: 24px;
+            display: grid;
+            place-items: center;
             pointer-events: none;
-            transition: opacity 0.2s ease, transform 0.2s ease;
-            z-index: 20;
         }
 
-        .toast.show { opacity: 1; transform: translate(-50%, 0); }
+        .toast {
+            background: rgba(16, 40, 28, 0.9);
+            color: rgba(255, 255, 255, 0.92);
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            max-width: 92vw;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .toast.show { opacity: 1; transform: translateY(0); }
 
         .overlay {
             position: fixed;
@@ -655,6 +663,8 @@
 
         <div class="board" id="board"></div>
 
+        <div class="toastrail"><span class="toast" id="toast"></span></div>
+
         <div class="tools">
             <button class="tool" id="tool-hint" type="button">
                 <span class="icon">&#128161;</span>
@@ -674,7 +684,6 @@
         </div>
     </div>
 
-    <div class="toast" id="toast"></div>
     <div class="overlay" id="overlay"><div class="panel" id="panel"></div></div>
 
     <script src="levels.js"></script>
