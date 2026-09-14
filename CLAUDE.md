@@ -61,9 +61,13 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
 - Decks grow with the level, from 28 cards on level 1 to 64 on the last two,
   and late categories run to eight or nine words so a slot stays busy longer.
   A 64-card level allows about 128 moves
-- A refused move shakes the stack it was aimed at. The toast is secondary: a
-  small pill in a reserved strip above the tools (`.toastrail`), about a second
-  long, so keep its wording to a few words
+- A refused move shakes the stack it was aimed at; a move that lands flashes
+  the destination green. The toast is secondary: a small pill in a reserved
+  strip above the tools (`.toastrail`), about a second long, so keep its
+  wording to a few words
+- While a card is being dragged, only the zone under the pointer is marked, and
+  the same way whether the drop is legal or not. Marking just the legal targets
+  would tell the player which category a card belongs to
 - Cards move by drag and drop only (pointer events, so mouse and touch alike).
   A tap or click never moves a card; tapping the stock is the one exception, and
   it deals rather than moves
@@ -71,8 +75,14 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   usable cards and keeps the order it dealt, so every deal is solvable and the
   move limit is derived from that solution plus part of a pass through the deck
   (`RECYCLE_ALLOWANCE`, capped so a big deck does not hand out a fortune in
-  spare moves). The dealer reads only what a player can see, never the buried
-  cards
+  spare moves). A level marked `minimal` gets exactly the solution and not a
+  move more — level 12 is set that way, and clears with zero to spare. The
+  dealer reads only what a player can see, never the buried cards
+- The dealer deals from whichever category has the most cards still waiting,
+  avoiding the one it dealt last, and a deal whose deck runs more than `MAX_RUN`
+  of a category back to back is thrown away and dealt again. Taking the first
+  usable card each time left a category stranded at the bottom of the deck,
+  dealt out in one run, which looked like an unshuffled deck
 - Twelve levels, none of them locked — any level can be started from the menu.
   Levels 11 and 12 (`Crossed Wires`, `Double Lives`) are the hard ones: their
   categories are built so that every word could pass for a category also on the
@@ -86,6 +96,11 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
 - The board is written to `localStorage` after every change and restored on
   load, so a reload (a pull-to-refresh on a phone, say) resumes the same game
   rather than dealing a new one; the save is cleared when the level ends
+- The joker is a card, not a mode: taking one deals a `kind: 'joker'` card onto
+  the unplaced pile. It can be dropped on any column whatever sits there (a
+  crowned lid excepted), and once down, anything stacks on it. It never goes to
+  a foundation, is not counted among the cards left to clear, and is swept off
+  when the level is won
 - No coins. Hint, undo and joker are capped per level (3 / 5 / 1, see `LIMITS`
   in `game.js`) and the allowance refills on a new deal; each button shows what
   is left and greys out when spent. Only level progress is stored, in
