@@ -109,7 +109,9 @@ var CATEGORIES = {
 /* rows  — cards dealt into the shortest tableau column; the four columns run
            rows, rows+1, rows+2, rows+3, and everything left over is the stock
    slack — spare moves on top of the solution the dealer worked out, as a
-           fraction of it, before a free pass through the deck is added */
+           fraction of it, before a capped pass through the deck is added
+   minimal — ignore slack and allow exactly the solution the dealer found, so
+           the level takes a near-perfect line to clear */
 var LEVELS = [
     { name: 'Warm Up',       cats: ['greek', 'rest', 'cities', 'fruit', 'weather'],                                  rows: 3, slack: 0.45 },
     { name: 'Draw Pile',     cats: ['robots', 'sticky', 'coffee', 'dance', 'raptors'],                               rows: 4, slack: 0.40 },
@@ -121,8 +123,8 @@ var LEVELS = [
     { name: 'Full Table',    cats: ['beer', 'cocktails', 'furniture', 'hats', 'shoes', 'space', 'waters'],           rows: 6, slack: 0.18 },
     { name: 'Workshop',      cats: ['math', 'chemistry', 'type', 'sewing', 'fungi', 'peppers', 'citrus'],            rows: 6, slack: 0.16 },
     { name: 'Long Haul',     cats: ['sauces', 'grains', 'cardgames', 'martial', 'track', 'mammals', 'tea'],          rows: 6, slack: 0.14 },
-    { name: 'Crossed Wires', cats: ['hardbirds', 'chess', 'poker', 'landform', 'fast', 'ships', 'tools'],            rows: 6, slack: 0.15 },
-    { name: 'Double Lives',  cats: ['fish', 'colors', 'ducks', 'body', 'flowers', 'buildings', 'trees'],             rows: 6, slack: 0.15 }
+    { name: 'Crossed Wires', cats: ['hardbirds', 'chess', 'poker', 'landform', 'fast', 'ships', 'tools'],            rows: 6, slack: 0.08 },
+    { name: 'Double Lives',  cats: ['fish', 'colors', 'ducks', 'body', 'flowers', 'buildings', 'trees'],             rows: 6, slack: 0, minimal: true }
 ];
 
 /* Run WordSolitaire.checkLevels() in the console to check the data holds. */

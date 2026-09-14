@@ -61,7 +61,6 @@
                 moveLimit: state.moveLimit,
                 solution: state.solution,
                 tools: state.tools,
-                wild: state.wild,
                 // only what the player can still undo is worth keeping
                 history: state.history.slice(-Math.max(0, state.tools.undo))
             }));
@@ -92,7 +91,6 @@
             solution: saved.solution,
             history: saved.history || [],
             tools: saved.tools || { hint: LIMITS.hint, undo: LIMITS.undo, wild: LIMITS.wild },
-            wild: !!saved.wild,
             over: null
         };
         render();
@@ -109,7 +107,7 @@
         if (!column.length) return [];
         var last = column[column.length - 1];
         if (!last.faceUp) return [];
-        if (last.kind === 'cat') return [last];
+        if (last.kind !== 'word') return [last];      // a crowned card or a joker travels alone
         var run = [];
         for (var i = column.length - 1; i >= 0; i--) {
             var card = column[i];
@@ -129,6 +127,7 @@
     function canPlaceOnFoundation(cards, index) {
         var pile = state.foundations[index];
         var card = cards[0];
+        if (card.kind === 'joker') return false;       // jokers never go home
         if (card.kind === 'cat') {
             return cards.length === 1 && !pile && slotOf(card.cat) < 0 &&
                 state.completed.indexOf(card.cat) < 0;
@@ -139,13 +138,14 @@
     /* A column takes a card of the same category, and a crowned card may cap a
        stack of its own words. Once it does, the stack is closed: a crowned card
        is a lid, and nothing sits on a lid. */
-    function canPlaceOnColumn(cards, index, wild) {
+    function canPlaceOnColumn(cards, index) {
         var column = state.tableau[index];
         if (!column.length) return true;
         var top = column[column.length - 1];
         if (!top.faceUp) return false;
-        if (top.kind === 'cat') return false;          // closed, even to a joker
-        if (wild) return true;
+        if (top.kind === 'cat') return false;          // a crowned card is a lid
+        if (top.kind === 'joker') return true;         // a joker takes anything
+        if (cards[0].kind === 'joker') return true;    // and lands anywhere
         return top.kind === 'word' && top.cat === cards[0].cat;
     }
 
@@ -153,9 +153,16 @@
         if (column.length) column[column.length - 1].faceUp = true;
     }
 
+    function isJoker(card) { return card.kind === 'joker'; }
+
     function cardsLeft() {
-        var total = state.stock.length + state.waste.length;
-        state.tableau.forEach(function (column) { total += column.length; });
+        var total = 0;
+        function count(list) {
+            list.forEach(function (card) { if (!isJoker(card)) total++; });
+        }
+        count(state.stock);
+        count(state.waste);
+        state.tableau.forEach(count);
         return total;
     }
 
@@ -201,7 +208,7 @@
         return { id: card.id, kind: card.kind, cat: card.cat, word: card.word, faceUp: !!card.faceUp };
     }
 
-    function simulate(level, layout, pool) {
+    function simulate(level, layout, pool, random) {
         var tableau = layout.map(function (column) { return column.map(cloneCard); });
         var waste = [];
         var piles = [];
@@ -210,6 +217,7 @@
         var stock = [];
         var left = pool.map(cloneCard);
         var moves = 0;
+        var recent = [];       // the last few categories dealt, to spread them out
         var i;
 
         for (i = 0; i < SLOTS; i++) piles.push(null);
@@ -299,32 +307,60 @@
                 if (acted) continue;
             }
 
-            // 4. Deal. The dealer hands over a card the player can use at once,
-            //    so the pile never grows a lid nothing can lift.
+            // 4. Deal. Every candidate is a card the player can use straight
+            //    away, and the dealer picks among them at random, preferring a
+            //    category other than the one it dealt last. Taking the first
+            //    usable card every time dealt a category out in one run, which
+            //    looked — and played — like an unshuffled deck.
             if (left.length) {
-                var pick = -1;
-                for (i = 0; i < left.length && pick < 0; i++) {
-                    if (left[i].kind === 'word' && open.hasOwnProperty(left[i].cat)) pick = i;
-                }
-                if (pick < 0 && freeSlot() >= 0) {
-                    var best = -1;
-                    for (i = 0; i < left.length; i++) {
-                        if (left[i].kind !== 'cat' || finished[left[i].cat] || open.hasOwnProperty(left[i].cat)) continue;
-                        var score = pressure(left[i].cat);
-                        if (score > best) { best = score; pick = i; }
-                    }
-                }
-                if (pick < 0) {           // else one that can at least be stacked
-                    for (i = 0; i < left.length && pick < 0; i++) {
-                        if (left[i].kind !== 'word') continue;
-                        for (t = 0; t < tableau.length && pick < 0; t++) {
+                var usable = [];       // goes straight to an open slot
+                var openers = [];      // a crowned card, with a slot free for it
+                var stackable = [];    // can at least sit on a column
+                var freeOne = freeSlot() >= 0;
+                for (i = 0; i < left.length; i++) {
+                    var candidate = left[i];
+                    if (candidate.kind === 'word' && open.hasOwnProperty(candidate.cat)) {
+                        usable.push(i);
+                    } else if (candidate.kind === 'cat' && freeOne && !finished[candidate.cat] &&
+                            !open.hasOwnProperty(candidate.cat)) {
+                        openers.push(i);
+                    } else if (candidate.kind === 'word') {
+                        for (t = 0; t < tableau.length; t++) {
                             var lip = tableau[t].length ? tableau[t][tableau[t].length - 1] : null;
-                            if (!tableau[t].length || (lip.faceUp && lip.kind === 'word' && lip.cat === left[i].cat)) pick = i;
+                            if (!lip || (lip.faceUp && lip.kind === 'word' && lip.cat === candidate.cat)) {
+                                stackable.push(i);
+                                break;
+                            }
                         }
                     }
                 }
-                if (pick < 0) pick = 0;
+
+                var choices = usable.concat(openers, stackable);
+                if (!choices.length) choices = left.map(function (ignored, n) { return n; });
+
+                // Deal from whichever category still has the most cards waiting,
+                // so they all run down together. Taking whatever was usable left
+                // one category stranded at the bottom of the deck, dealt out in
+                // a single run.
+                var remaining = {};
+                left.forEach(function (candidate) {
+                    remaining[candidate.cat] = (remaining[candidate.cat] || 0) + 1;
+                });
+                var fresh = choices.filter(function (n) { return left[n].cat !== recent[recent.length - 1]; });
+                var pool2 = fresh.length ? fresh : choices;
+                var best = -1;
+                var pick = pool2[0];
+                pool2.forEach(function (n) {
+                    var weight = remaining[left[n].cat] + random();   // ties fall either way
+                    if (weight > best) {
+                        best = weight;
+                        pick = n;
+                    }
+                });
+
                 card = left.splice(pick, 1)[0];
+                recent.push(card.cat);
+                if (recent.length > 3) recent.shift();
                 card.faceUp = true;
                 stock.push(card);
                 waste.push(card);
@@ -384,7 +420,7 @@
         if (!column.length) return [];
         var last = column[column.length - 1];
         if (!last.faceUp) return [];
-        if (last.kind === 'cat') return [last];
+        if (last.kind !== 'word') return [last];      // a crowned card or a joker travels alone
         var run = [];
         for (var i = column.length - 1; i >= 0; i--) {
             var card = column[i];
@@ -393,6 +429,21 @@
         }
         return run;
     }
+
+    // How many of one category the deck deals back to back at its worst.
+    function longestRun(cards) {
+        var worst = 0;
+        var run = 0;
+        var previous = null;
+        cards.forEach(function (card) {
+            run = card.cat === previous ? run + 1 : 1;
+            previous = card.cat;
+            if (run > worst) worst = run;
+        });
+        return worst;
+    }
+
+    var MAX_RUN = 4;   // a longer run reads as an unshuffled deck
 
     function buildDeal(level, random) {
         for (var attempt = 0; attempt < 250; attempt++) {
@@ -409,8 +460,11 @@
                     tableau[i].push(card);
                 }
             }
-            var plan = simulate(level, tableau, cards);
+            var plan = simulate(level, tableau, cards, random);
             if (!plan) continue;
+            // Deal again rather than hand over a deck that runs one category
+            // together; late attempts take what they can get.
+            if (attempt < 200 && longestRun(plan.stock) > MAX_RUN) continue;
             return {
                 tableau: tableau,
                 stock: plan.stock.map(function (card) {
@@ -421,8 +475,10 @@
                 // The dealer never has to turn the pile back, but a player who
                 // buries a card does, so the budget funds some of a pass. A big
                 // deck would otherwise hand out a fortune in spare moves.
-                moveLimit: Math.round(plan.moves * (1 + level.slack)) +
-                    Math.min(plan.stock.length, RECYCLE_ALLOWANCE),
+                moveLimit: level.minimal
+                    ? plan.moves        // exactly the solution: no room to wander
+                    : Math.round(plan.moves * (1 + level.slack)) +
+                        Math.min(plan.stock.length, RECYCLE_ALLOWANCE),
                 attempts: attempt + 1
             };
         }
@@ -450,7 +506,6 @@
             solution: deal.solution,
             history: [],
             tools: { hint: LIMITS.hint, undo: LIMITS.undo, wild: LIMITS.wild },
-            wild: false,
             over: null
         };
         closeOverlay();
@@ -464,7 +519,8 @@
             foundations: state.foundations,
             tableau: state.tableau,
             completed: state.completed,
-            moves: state.moves
+            moves: state.moves,
+            tools: state.tools
         })));
         if (state.history.length > 250) state.history.shift();
     }
@@ -529,18 +585,19 @@
         return list;
     }
 
-    function canDrop(cards, to, wild) {
+    function canDrop(cards, to) {
         if (!cards.length) return false;
         if (to.zone === 'foundation') {
             return to.index < state.foundations.length && canPlaceOnFoundation(cards, to.index);
         }
-        if (to.zone === 'tableau') return state.tableau[to.index] ? canPlaceOnColumn(cards, to.index, wild) : false;
-        return false;               // the row only ever fills from the deck
+        if (to.zone === 'tableau') return state.tableau[to.index] ? canPlaceOnColumn(cards, to.index) : false;
+        return false;               // the pile only ever fills from the deck
     }
 
     function rejection(cards, to) {
         if (to.zone === 'waste') return 'Only the deck fills that pile';
         if (to.zone === 'foundation') {
+            if (cards[0].kind === 'joker') return 'A joker has no slot';
             var pile = state.foundations[to.index];
             if (!pile) return 'Crowned cards open slots';
             if (cards[0].kind === 'cat') return 'That slot is taken';
@@ -560,12 +617,11 @@
         var cards = pickable(from.zone, from.index);
         if (!cards.length) return false;
         if (from.zone === to.zone && from.index === to.index) return false;
-        if (!canDrop(cards, to, state.wild)) {
+        if (!canDrop(cards, to)) {
             toast(rejection(cards, to));
             shake(to.zone, to.index);
             return false;
         }
-        var neededWild = to.zone === 'tableau' && !canPlaceOnColumn(cards, to.index, false);
         snapshot();
         var moved = take(from);
         if (to.zone === 'foundation') {
@@ -577,10 +633,10 @@
         } else {
             state.tableau[to.index] = state.tableau[to.index].concat(moved);
         }
-        if (neededWild) state.wild = false;
         state.moves--;
         resolveCompletions();
         render();
+        flashLanded(to);
         checkEnd();
         return true;
     }
@@ -615,7 +671,7 @@
         sources().forEach(function (from) {
             destinations().forEach(function (to) {
                 if (from.zone === to.zone && from.index === to.index) return;
-                if (!canDrop(from.cards, to, false)) return;
+                if (!canDrop(from.cards, to)) return;
                 // Sliding a whole column into an empty one is not progress.
                 if (to.zone === 'tableau' && !state.tableau[to.index].length &&
                     from.zone === 'tableau' &&
@@ -649,6 +705,11 @@
     function checkEnd() {
         if (state.over) return;
         if (!cardsLeft() && !state.foundations.some(Boolean)) {
+            // sweep off any joker still lying about, so the table really is clear
+            state.waste = state.waste.filter(function (card) { return !isJoker(card); });
+            state.tableau = state.tableau.map(function (column) {
+                return column.filter(function (card) { return !isJoker(card); });
+            });
             state.over = 'win';
             if (state.levelIndex + 1 > progress) {
                 progress = state.levelIndex + 1;
@@ -706,6 +767,13 @@
         }
         state.tools.undo--;
         var previous = state.history.pop();
+        if (previous.tools) {                  // the undo just spent stays spent
+            state.tools = {
+                hint: previous.tools.hint,
+                undo: state.tools.undo,
+                wild: previous.tools.wild
+            };
+        }
         state.stock = previous.stock;
         state.waste = previous.waste;
         state.foundations = previous.foundations;
@@ -717,22 +785,25 @@
         render();
     }
 
-    function useWild() {
+    /* The joker is a card, not a mode. Taking one deals it onto the unplaced
+       pile; from there you drag it like anything else. It lands on any column,
+       and once down, anything can be stacked on it. */
+    function takeJoker() {
         if (state.over) return;
-        if (state.wild) {                       // putting it away hands it back
-            state.wild = false;
-            state.tools.wild++;
-            toast('Joker put away');
-            render();
-            return;
-        }
         if (!state.tools.wild) {
             toast('No jokers left');
             return;
         }
+        snapshot();
         state.tools.wild--;
-        state.wild = true;
-        toast('Joker ready — drop anywhere');
+        state.waste.push({
+            id: 'joker-' + state.waste.length + '-' + state.moves,
+            kind: 'joker',
+            cat: null,
+            word: 'Joker',
+            faceUp: true
+        });
+        toast('Joker dealt — drag it anywhere');
         render();
     }
 
@@ -754,6 +825,10 @@
         var classes = 'card' + (card.kind === 'cat' ? ' catcard' : '') + (options.classes || '');
         var style = options.style ? ' style="' + options.style + '"' : '';
         var inner = options.prefix || '';
+        if (card.kind === 'joker') {
+            return '<div class="' + classes.replace('card', 'card jokercard') + '"' + style + '>' +
+                inner + '<span class="jokerface">&#127183;</span><span class="word">Joker</span></div>';
+        }
         if (card.kind === 'cat') {
             inner += '<span class="crown">&#9819;</span>' +
                 '<span class="count">0/' + catSize(card.cat) + '</span>';
@@ -778,7 +853,6 @@
             button.querySelector('.badge').textContent = left;
             button.classList.toggle('spent', !left);
         });
-        document.getElementById('tool-wild').classList.toggle('armed', state.wild);
     }
 
     function renderHeader() {
@@ -894,6 +968,15 @@
         return document.querySelector('[data-zone="' + zone + '"][data-index="' + index + '"]');
     }
 
+    function flashLanded(to) {
+        var el = zoneEl(to.zone, to.index);
+        if (!el) return;
+        el.classList.remove('landed');
+        void el.offsetWidth;
+        el.classList.add('landed');
+        window.setTimeout(function () { el.classList.remove('landed'); }, 480);
+    }
+
     function shake(zone, index) {
         var el = zoneEl(zone, index);
         if (!el) return;
@@ -961,8 +1044,8 @@
                 : '');
         openOverlay(
             '<h2>No moves left</h2>' +
-            '<p>Nothing can be placed and the row is jammed.' +
-            (outs ? ' A joker starts a column anywhere, or you can take a move back.'
+            '<p>Nothing can be placed.' +
+            (outs ? ' A joker is a card that lands on any column, or you can take a move back.'
                   : ' Nothing left to spend on this one — deal it again.') + '</p>' +
             outs +
             '<button class="btn' + (outs ? ' ghost' : ' primary') + '" data-action="replay">Restart level</button>'
@@ -1006,6 +1089,10 @@
             'own words and it caps them, marked with a gold lid. Nothing can be ' +
             'added on top after that, so move the crowned card off — to its slot, ' +
             'usually — to open the stack back up.</li>' +
+            '<li><b>The joker is a card.</b> Take one and it is dealt onto the ' +
+            'unplaced pile. Drag it onto any column, whatever is sitting there, ' +
+            'and from then on anything can be stacked on it — which is how you ' +
+            'start a stack with nowhere else to put it.</li>' +
             '<li><b>Deal when stuck.</b> Tap the deck as often as you like. Each ' +
             'card lands on the unplaced pile beside it, and only the card on top ' +
             'of that pile is in play — the ones behind it are waiting.</li>' +
@@ -1034,18 +1121,8 @@
         };
     }
 
-    function markTargets(cards, from) {
-        destinations().forEach(function (to) {
-            if (from.zone === to.zone && from.index === to.index) return;
-            if (!canDrop(cards, to, state.wild)) return;
-            var el = zoneEl(to.zone, to.index);
-            if (el) el.classList.add('drop-ok');
-        });
-    }
-
     function clearTargets() {
-        Array.prototype.forEach.call(document.querySelectorAll('.drop-ok, .drop-over'), function (el) {
-            el.classList.remove('drop-ok');
+        Array.prototype.forEach.call(document.querySelectorAll('.drop-over'), function (el) {
             el.classList.remove('drop-over');
         });
     }
@@ -1100,7 +1177,6 @@
         for (var i = cardEls.length - cards.length; i < cardEls.length; i++) {
             cardEls[i].classList.add('dragging');
         }
-        markTargets(cards, drag.from);
         document.addEventListener('pointermove', onDragMove);
         document.addEventListener('pointerup', onDragEnd);
         document.addEventListener('pointercancel', onDragEnd);
@@ -1114,8 +1190,12 @@
         Array.prototype.forEach.call(document.querySelectorAll('.drop-over'), function (el) {
             el.classList.remove('drop-over');
         });
+        // Whatever is under the finger is marked, legal or not: showing only
+        // the legal ones would answer the puzzle for the player.
         var over = zoneAt(event.clientX, event.clientY);
-        if (over && over.el.classList.contains('drop-ok')) over.el.classList.add('drop-over');
+        if (over && over.zone !== 'stock' && !(over.zone === drag.from.zone && over.index === drag.from.index)) {
+            over.el.classList.add('drop-over');
+        }
     }
 
     function onDragEnd(event) {
@@ -1143,7 +1223,7 @@
 
     document.getElementById('tool-hint').addEventListener('click', useHint);
     document.getElementById('tool-undo').addEventListener('click', useUndo);
-    document.getElementById('tool-wild').addEventListener('click', useWild);
+    document.getElementById('tool-wild').addEventListener('click', takeJoker);
     document.getElementById('menu-btn').addEventListener('click', showMenu);
 
     overlayEl.addEventListener('click', function (event) {
@@ -1161,7 +1241,7 @@
         if (action === 'next') newGame(Math.min(state.levelIndex + 1, LEVELS.length - 1));
         if (action === 'goto') newGame(parseInt(trigger.getAttribute('data-level'), 10));
         if (action === 'undo') useUndo();
-        if (action === 'wild') { closeOverlay(); useWild(); }
+        if (action === 'wild') { closeOverlay(); takeJoker(); }
     });
 
     document.addEventListener('keydown', function (event) {
