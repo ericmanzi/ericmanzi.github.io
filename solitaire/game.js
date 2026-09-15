@@ -101,20 +101,27 @@
 
     function catSize(catId) { return CATEGORIES[catId].words.length; }
 
-    /* What dragging a column picks up: the face-up run of same-category word
-       cards on top of it, or a single category card. */
+    /* What dragging a column picks up. A crowned card capping its own words
+       lifts the whole stack with it; a joker travels alone; otherwise it is the
+       face-up run of same-category words on top. */
     function topRun(column) {
         if (!column.length) return [];
         var last = column[column.length - 1];
         if (!last.faceUp) return [];
-        if (last.kind !== 'word') return [last];      // a crowned card or a joker travels alone
-        var run = [];
-        for (var i = column.length - 1; i >= 0; i--) {
+        if (last.kind === 'joker') return [last];
+        var run = [last];
+        for (var i = column.length - 2; i >= 0; i--) {
             var card = column[i];
             if (!card.faceUp || card.kind !== 'word' || card.cat !== last.cat) break;
             run.unshift(card);
         }
         return run;
+    }
+
+    /* The crowned card of a capped stack, which always rides on top. */
+    function crownOf(cards) {
+        var last = cards[cards.length - 1];
+        return last && last.kind === 'cat' ? last : null;
     }
 
     function slotOf(catId) {
@@ -126,13 +133,15 @@
 
     function canPlaceOnFoundation(cards, index) {
         var pile = state.foundations[index];
-        var card = cards[0];
-        if (card.kind === 'joker') return false;       // jokers never go home
-        if (card.kind === 'cat') {
-            return cards.length === 1 && !pile && slotOf(card.cat) < 0 &&
-                state.completed.indexOf(card.cat) < 0;
+        var crown = crownOf(cards);
+        if (cards[0].kind === 'joker') return false;   // jokers never go home
+        if (crown) {
+            if (pile || slotOf(crown.cat) >= 0) return false;
+            if (state.completed.indexOf(crown.cat) >= 0) return false;
+            return cards.every(function (card) { return card.cat === crown.cat; });
         }
-        return !!pile && pile.cat === card.cat && pile.cards.length + cards.length <= catSize(pile.cat);
+        return !!pile && pile.cat === cards[0].cat &&
+            pile.cards.length + cards.length <= catSize(pile.cat);
     }
 
     /* A column takes a card of the same category, and a crowned card may cap a
@@ -140,6 +149,8 @@
        is a lid, and nothing sits on a lid. */
     function canPlaceOnColumn(cards, index) {
         var column = state.tableau[index];
+        // A capped stack has one destination: the slot its crowned card opens.
+        if (crownOf(cards) && cards.length > 1) return false;
         if (!column.length) return true;
         var top = column[column.length - 1];
         if (!top.faceUp) return false;
@@ -240,11 +251,16 @@
             }
         }
 
-        function openCategory(card) {
+        function openCategory(card, carried) {
             var slot = freeSlot();
-            piles[slot] = { cat: card.cat, count: 0 };
+            piles[slot] = { cat: card.cat, count: carried ? carried.length : 0 };
             open[card.cat] = slot;
             moves++;
+            if (piles[slot].count === catSize(card.cat)) {
+                piles[slot] = null;
+                delete open[card.cat];
+                finished[card.cat] = true;
+            }
         }
 
         // How many cards of a category are waiting on the board — the dealer
@@ -270,7 +286,8 @@
             for (t = 0; t < tableau.length && !acted; t++) {
                 var column = tableau[t];
                 var run = topRunOf(column);
-                if (!run.length || run[0].kind !== 'word' || !open.hasOwnProperty(run[0].cat)) continue;
+                if (!run.length || crownIn(run)) continue;
+                if (run[0].kind !== 'word' || !open.hasOwnProperty(run[0].cat)) continue;
                 column.splice(column.length - run.length, run.length);
                 flipTop(column);
                 collect(run);
@@ -290,13 +307,13 @@
                 for (t = 0; t < tableau.length && !acted; t++) {
                     var col = tableau[t];
                     if (!col.length) continue;
-                    card = col[col.length - 1];
-                    if (card.kind === 'cat' && !finished[card.cat] && !open.hasOwnProperty(card.cat)) {
-                        col.pop();
-                        flipTop(col);
-                        openCategory(card);
-                        acted = true;
-                    }
+                    var capped = topRunOf(col);
+                    var crown = crownIn(capped);
+                    if (!crown || finished[crown.cat] || open.hasOwnProperty(crown.cat)) continue;
+                    col.splice(col.length - capped.length, capped.length);
+                    flipTop(col);
+                    openCategory(crown, capped.slice(0, -1));
+                    acted = true;
                 }
                 if (!acted && lid && lid.kind === 'cat' && !finished[lid.cat] &&
                         !open.hasOwnProperty(lid.cat)) {
@@ -383,7 +400,8 @@
             // 6. Dig: move a run onto a matching column to uncover what is under it.
             for (t = 0; t < tableau.length && !acted; t++) {
                 var dig = topRunOf(tableau[t]);
-                if (!dig.length || dig.length === tableau[t].length || dig[0].kind !== 'word') continue;
+                if (!dig.length || dig.length === tableau[t].length || crownIn(dig)) continue;
+                if (dig[0].kind !== 'word') continue;
                 for (var d = 0; d < tableau.length && !acted; d++) {
                     if (d === t) continue;
                     var onto = tableau[d];
@@ -420,9 +438,9 @@
         if (!column.length) return [];
         var last = column[column.length - 1];
         if (!last.faceUp) return [];
-        if (last.kind !== 'word') return [last];      // a crowned card or a joker travels alone
-        var run = [];
-        for (var i = column.length - 1; i >= 0; i--) {
+        if (last.kind === 'joker') return [last];
+        var run = [last];
+        for (var i = column.length - 2; i >= 0; i--) {
             var card = column[i];
             if (!card.faceUp || card.kind !== 'word' || card.cat !== last.cat) break;
             run.unshift(card);
@@ -444,6 +462,11 @@
     }
 
     var MAX_RUN = 4;   // a longer run reads as an unshuffled deck
+
+    function crownIn(run) {
+        var last = run[run.length - 1];
+        return last && last.kind === 'cat' ? last : null;
+    }
 
     function buildDeal(level, random) {
         for (var attempt = 0; attempt < 250; attempt++) {
@@ -596,6 +619,9 @@
 
     function rejection(cards, to) {
         if (to.zone === 'waste') return 'Only the deck fills that pile';
+        if (to.zone === 'tableau' && crownOf(cards) && cards.length > 1) {
+            return 'A capped stack only goes to a slot';
+        }
         if (to.zone === 'foundation') {
             if (cards[0].kind === 'joker') return 'A joker has no slot';
             var pile = state.foundations[to.index];
@@ -625,20 +651,38 @@
         snapshot();
         var moved = take(from);
         if (to.zone === 'foundation') {
-            if (moved[0].kind === 'cat') {
-                state.foundations[to.index] = { cat: moved[0].cat, cards: [] };
+            var crown = crownOf(moved);
+            if (crown) {
+                state.foundations[to.index] = { cat: crown.cat, cards: moved.slice(0, -1) };
             } else {
                 state.foundations[to.index].cards = state.foundations[to.index].cards.concat(moved);
             }
         } else {
-            state.tableau[to.index] = state.tableau[to.index].concat(moved);
+            var landing = state.tableau[to.index];
+            var under = landing.length ? landing[landing.length - 1] : null;
+            if (under && under.kind === 'joker') under.used = true;   // it has done its job
+            state.tableau[to.index] = landing.concat(moved);
         }
         state.moves--;
+        burnSpentJokers();
         resolveCompletions();
         render();
         flashLanded(to);
         checkEnd();
         return true;
+    }
+
+    /* A joker is good for one stack. Once something has been piled onto it and
+       then taken off again, the joker goes with it. */
+    function burnSpentJokers() {
+        state.tableau.forEach(function (column, index) {
+            var top = column.length ? column[column.length - 1] : null;
+            if (!top || top.kind !== 'joker' || !top.used) return;
+            column.pop();
+            flipTop(column);
+            state.tableau[index] = column;
+            toast('Joker spent');
+        });
     }
 
     /* A foundation holding every word of its category locks in, clears the
@@ -1087,12 +1131,15 @@
             'card can go on an empty column.</li>' +
             '<li><b>A crowned card closes a stack.</b> Drop one on a stack of its ' +
             'own words and it caps them, marked with a gold lid. Nothing can be ' +
-            'added on top after that, so move the crowned card off — to its slot, ' +
-            'usually — to open the stack back up.</li>' +
+            'added on top after that. Drag the crowned card again and the whole ' +
+            'capped stack comes with it — straight to a slot, which is the only ' +
+            'place it will go, opening the category and banking every word it ' +
+            'carries in one move.</li>' +
             '<li><b>The joker is a card.</b> Take one and it is dealt onto the ' +
             'unplaced pile. Drag it onto any column, whatever is sitting there, ' +
-            'and from then on anything can be stacked on it — which is how you ' +
-            'start a stack with nowhere else to put it.</li>' +
+            'and anything can then be stacked on it — which is how you start a ' +
+            'stack with nowhere else to put it. It is good for that one stack: ' +
+            'lift what you piled on and the joker goes with it.</li>' +
             '<li><b>Deal when stuck.</b> Tap the deck as often as you like. Each ' +
             'card lands on the unplaced pile beside it, and only the card on top ' +
             'of that pile is in play — the ones behind it are waiting.</li>' +

@@ -54,7 +54,11 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
 - Tableau columns are working space: words of one category stack on each other
   and move as a group. A crowned card may be dropped on a stack of its own
   words, which caps it — a crowned card is a lid, so nothing (not even a joker)
-  goes on top until it is moved off. Cards are dealt face down except the card
+  goes on top until it is moved off. Dragging that crowned card lifts the whole
+  capped stack (`topRun` keeps the words under it), and a capped stack is only
+  droppable on an empty foundation slot, where the crowned card opens the
+  category and its words land on it in the same move. The dealer mirrors this,
+  so its plan and the board never diverge. Cards are dealt face down except the card
   on top of each column, in a staircase (4, 5, 6, 7)
 - Filling a category clears its slot. Every action costs a move; the level is
   lost when the counter reaches zero with cards still out
@@ -100,7 +104,9 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   the unplaced pile. It can be dropped on any column whatever sits there (a
   crowned lid excepted), and once down, anything stacks on it. It never goes to
   a foundation, is not counted among the cards left to clear, and is swept off
-  when the level is won
+  when the level is won. It is good for one stack: anything placed on a joker
+  marks it `used`, and `burnSpentJokers()` removes it as soon as it is uncovered
+  again
 - No coins. Hint, undo and joker are capped per level (3 / 5 / 1, see `LIMITS`
   in `game.js`) and the allowance refills on a new deal; each button shows what
   is left and greys out when spent. Only level progress is stored, in
