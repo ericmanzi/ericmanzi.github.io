@@ -646,6 +646,7 @@
         if (!canDrop(cards, to)) {
             toast(rejection(cards, to));
             shake(to.zone, to.index);
+            flashZone(to, 'rejected');
             return false;
         }
         snapshot();
@@ -667,7 +668,7 @@
         burnSpentJokers();
         resolveCompletions();
         render();
-        flashLanded(to);
+        flashZone(to, 'landed');
         checkEnd();
         return true;
     }
@@ -902,7 +903,7 @@
     function renderHeader() {
         movesEl.textContent = state.moves;
         movesEl.classList.toggle('low', state.moves <= 5);
-        levelEl.textContent = 'Level ' + (state.levelIndex + 1) + ' · ' + state.level.name;
+        levelEl.textContent = 'LVL ' + (state.levelIndex + 1);
         var dots = '';
         state.level.cats.forEach(function (catId) {
             var done = state.completed.indexOf(catId) >= 0;
@@ -1012,13 +1013,14 @@
         return document.querySelector('[data-zone="' + zone + '"][data-index="' + index + '"]');
     }
 
-    function flashLanded(to) {
+    /* Green where a card lands, red where one is turned away. */
+    function flashZone(to, mark) {
         var el = zoneEl(to.zone, to.index);
         if (!el) return;
-        el.classList.remove('landed');
+        el.classList.remove(mark);
         void el.offsetWidth;
-        el.classList.add('landed');
-        window.setTimeout(function () { el.classList.remove('landed'); }, 480);
+        el.classList.add(mark);
+        window.setTimeout(function () { el.classList.remove(mark); }, 520);
     }
 
     function shake(zone, index) {
