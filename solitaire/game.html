@@ -263,11 +263,13 @@
 
         .fslot.filled .card { border-color: var(--gold); }
 
-        .level-name {
-            font-size: 12px;
-            letter-spacing: 0.6px;
-            color: rgba(255, 255, 255, 0.72);
-            text-align: center;
+        /* The level reads as a number in the corner, which keeps a line of
+           height for the board and the tools. */
+        .lvl {
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            color: rgba(255, 255, 255, 0.82);
         }
 
         /* ---------------- board ---------------- */
@@ -368,15 +370,68 @@
             z-index: 4;
         }
 
-        /* A card that lands somewhere legal flashes green. */
-        .landed .card:last-child {
-            animation: landed 0.48s ease-out;
+        /* Feedback on a drop, on the card itself where the eye already is: a
+           tint plus a ring that swells and fades, green when it lands and red
+           when it is refused. Both are brief and neither moves anything the
+           player has to wait for. */
+        .landed .card:last-child, .landed .hole {
+            animation: landed 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+            z-index: 6;
         }
 
+        .rejected .card:last-child, .rejected .hole {
+            animation: rejected 0.5s ease-out;
+            z-index: 6;
+        }
+
+        /* Each flash holds its colour for the first quarter before it drains
+           away: a tint that starts fading immediately is gone before the eye
+           gets back from the card it was dragging. */
         @keyframes landed {
-            0% { box-shadow: 0 0 0 3px rgba(93, 200, 120, 0.9), 0 6px 14px rgba(0, 0, 0, 0.3); background: #dff5e4; }
-            70% { box-shadow: 0 0 0 3px rgba(93, 200, 120, 0.5), 0 5px 12px rgba(0, 0, 0, 0.26); background: #eef9f0; }
-            100% { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22); background: var(--card); }
+            0% {
+                transform: scale(1.08);
+                background: #7fe0a0;
+                box-shadow: 0 0 0 5px rgba(28, 150, 74, 0.95), 0 8px 18px rgba(0, 0, 0, 0.3);
+            }
+            28% {
+                transform: scale(1.04);
+                background: #7fe0a0;
+                box-shadow: 0 0 0 5px rgba(28, 150, 74, 0.95), 0 8px 18px rgba(0, 0, 0, 0.3);
+            }
+            62% {
+                background: #d8f6e2;
+                box-shadow: 0 0 0 10px rgba(28, 150, 74, 0.22), 0 6px 14px rgba(0, 0, 0, 0.26);
+            }
+            100% {
+                transform: scale(1);
+                background: var(--card);
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22);
+            }
+        }
+
+        @keyframes rejected {
+            0% {
+                background: #f3a49d;
+                box-shadow: 0 0 0 5px rgba(196, 44, 34, 0.95), 0 8px 18px rgba(0, 0, 0, 0.3);
+            }
+            28% {
+                background: #f3a49d;
+                box-shadow: 0 0 0 5px rgba(196, 44, 34, 0.95), 0 8px 18px rgba(0, 0, 0, 0.3);
+            }
+            62% {
+                background: #fbdedb;
+                box-shadow: 0 0 0 10px rgba(196, 44, 34, 0.22), 0 6px 14px rgba(0, 0, 0, 0.26);
+            }
+            100% {
+                background: var(--card);
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.22);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .shake { animation-duration: 0.01ms; }
+            .landed .card:last-child, .landed .hole,
+            .rejected .card:last-child, .rejected .hole { animation-duration: 0.3s; }
         }
 
         .card.jokercard {
@@ -455,6 +510,7 @@
             justify-content: center;
             gap: 22px;
             padding-top: 8px;
+            padding-bottom: 22px;   /* lifts the row clear of the bottom edge */
         }
 
         .tool {
@@ -666,6 +722,7 @@
     <div class="app">
         <div class="bar">
             <button class="icon-btn" id="menu-btn" type="button" aria-label="Menu">&#9776;</button>
+            <span class="lvl" id="level-name">LVL 1</span>
             <span class="dots" id="dots"></span>
         </div>
 
@@ -677,8 +734,6 @@
             <div class="waste" id="waste"></div>
             <div class="stock" id="stock" data-zone="stock" data-index="0"></div>
         </div>
-
-        <div class="level-name" id="level-name"></div>
 
         <div class="foundations" id="foundations"></div>
 

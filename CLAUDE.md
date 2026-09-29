@@ -54,17 +54,27 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
 - Tableau columns are working space: words of one category stack on each other
   and move as a group. A crowned card may be dropped on a stack of its own
   words, which caps it — a crowned card is a lid, so nothing (not even a joker)
-  goes on top until it is moved off. Cards are dealt face down except the card
+  goes on top until it is moved off. Dragging that crowned card lifts the whole
+  capped stack (`topRun` keeps the words under it), and a capped stack is only
+  droppable on an empty foundation slot, where the crowned card opens the
+  category and its words land on it in the same move. The dealer mirrors this,
+  so its plan and the board never diverge. Cards are dealt face down except the card
   on top of each column, in a staircase (4, 5, 6, 7)
 - Filling a category clears its slot. Every action costs a move; the level is
   lost when the counter reaches zero with cards still out
-- Decks grow with the level, from 28 cards on level 1 to 64 on the last two,
-  and late categories run to eight or nine words so a slot stays busy longer.
-  A 64-card level allows about 128 moves
-- A refused move shakes the stack it was aimed at; a move that lands flashes
-  the destination green. The toast is secondary: a small pill in a reserved
-  strip above the tools (`.toastrail`), about a second long, so keep its
-  wording to a few words
+- Decks grow with the level, from 24 cards on level 1 to 64 on the two trap
+  levels at the end. A 64-card level allows about 128 moves. Each level needs
+  more cards than its tableau takes (`4 * rows + 6`), or there is no stock at
+  all — keep a dozen or so spare, and set `rows` to suit the deck rather than
+  the level number
+- A refused move shakes the stack it was aimed at and flashes it red; a move
+  that lands flashes the destination green. Both are a tint plus a ring that
+  swells and fades on the card itself. The colour holds for the first quarter
+  of the half second before it drains, or the eye misses it (`flashZone`). The
+  toast is secondary: a small pill in a reserved strip above the tools
+  (`.toastrail`), about a second long, so keep its wording to a few words
+- The level shows as a number in the top-left corner (`LVL 7`), which leaves
+  the height for the board and keeps the tool row clear of the bottom edge
 - While a card is being dragged, only the zone under the pointer is marked, and
   the same way whether the drop is legal or not. Marking just the legal targets
   would tell the player which category a card belongs to
@@ -76,19 +86,30 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   move limit is derived from that solution plus part of a pass through the deck
   (`RECYCLE_ALLOWANCE`, capped so a big deck does not hand out a fortune in
   spare moves). A level marked `minimal` gets exactly the solution and not a
-  move more — level 12 is set that way, and clears with zero to spare. The
+  move more — level 23 is set that way, and clears with zero to spare. The
   dealer reads only what a player can see, never the buried cards
 - The dealer deals from whichever category has the most cards still waiting,
   avoiding the one it dealt last, and a deal whose deck runs more than `MAX_RUN`
   of a category back to back is thrown away and dealt again. Taking the first
   usable card each time left a category stranded at the bottom of the deck,
   dealt out in one run, which looked like an unshuffled deck
-- Twelve levels, none of them locked — any level can be started from the menu.
-  Levels 11 and 12 (`Crossed Wires`, `Double Lives`) are the hard ones: their
-  categories are built so that every word could pass for a category also on the
-  table — Rook is a bird as well as a chess piece, Swift means fast, Teal is a
-  duck as well as a colour, Palm is a tree as well as a hand. Adding more like
-  them means picking words whose second home is another category in the level
+- Twenty-three levels, none of them locked — any level can be started from the
+  menu. They come in three runs: everyday sets (levels 1-12) using words anyone
+  would recognise, vocabulary sets (13-21) where each category is a word and
+  its synonyms, and the two trap levels last (`Crossed Wires`, `Double Lives`),
+  whose categories are built so that every word could pass for a category also
+  on the table — Rook is a bird as well as a chess piece, Swift means fast,
+  Teal is a duck as well as a colour, Palm is a tree as well as a hand, Hook
+  and Reel and Net are tackle and tools alike, Hazel and Chestnut are trees as
+  well as colours. Adding
+  more like them means picking words whose second home is another category in
+  the level
+- Category sizes run from three words to seven, deliberately mixed, so a board
+  holds a spread of short and long sets rather than eight of everything; one
+  set on the last level runs to nine. Keep
+  everyday words everyday: obscure ones (a cocktail nobody orders, a shoe
+  nobody names) belong only in the vocabulary levels, where the point is that
+  the word is unfamiliar
 - No word appears in two categories and no category appears in two levels, so
   nothing repeats as you play. `WordSolitaire.checkLevels()` enforces that,
   along with a category never being named after a card in its own level — run
@@ -100,7 +121,9 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   the unplaced pile. It can be dropped on any column whatever sits there (a
   crowned lid excepted), and once down, anything stacks on it. It never goes to
   a foundation, is not counted among the cards left to clear, and is swept off
-  when the level is won
+  when the level is won. It is good for one stack: anything placed on a joker
+  marks it `used`, and `burnSpentJokers()` removes it as soon as it is uncovered
+  again
 - No coins. Hint, undo and joker are capped per level (3 / 5 / 1, see `LIMITS`
   in `game.js`) and the allowance refills on a new deal; each button shows what
   is left and greys out when spent. Only level progress is stored, in
