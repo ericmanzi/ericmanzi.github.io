@@ -215,36 +215,40 @@ var CATEGORIES = {
    slack — spare moves on top of the solution the dealer worked out, as a
            fraction of it, before a capped pass through the deck is added
    minimal — ignore slack and allow exactly the solution the dealer found, so
-           the level takes a near-perfect line to clear */
+           the level takes a near-perfect line to clear
+   moves — a budget set by hand, which overrides slack and minimal both. The
+           dealer throws away any deal it cannot solve inside that number, so
+           a pin always leaves a line to the win; set one below what the level
+           needs and the console says so and the deal falls back to minimal */
 var LEVELS = [
-    { name: 'Warm Up',       cats: ['greek', 'rest', 'suits', 'temps', 'lifestage'],                                    rows: 3, slack: 0.45 },
-    { name: 'Kitchen',       cats: ['baked', 'drinks', 'cheese', 'berries', 'veg', 'soup'],                             rows: 3, slack: 0.42 },
-    { name: 'Out and About', cats: ['cities', 'continents', 'weather', 'boats', 'golf', 'clouds'],                      rows: 4, slack: 0.38 },
-    { name: 'Menagerie',     cats: ['catbreeds', 'bigcats', 'dogs', 'birdparts', 'bovines', 'pets', 'insects'],         rows: 4, slack: 0.35 },
-    { name: 'Garden',        cats: ['flowers', 'treeparts', 'herbs', 'greens', 'fungi', 'geology', 'seasons'],          rows: 4, slack: 0.32 },
-    { name: 'Pantry',        cats: ['coffee', 'tea', 'spices', 'bread', 'pasta', 'sauces', 'grains', 'citrus'],         rows: 5, slack: 0.30 },
-    { name: 'Night Sky',     cats: ['planets', 'space', 'physics', 'math', 'metals', 'gems', 'chemistry', 'weights'],   rows: 5, slack: 0.28 },
-    { name: 'Wardrobe',      cats: ['hats', 'shoes', 'fabrics', 'sewing', 'type', 'furniture', 'toolbox', 'skincare'],  rows: 5, slack: 0.26 },
-    { name: 'Far Places',    cats: ['peaks', 'deserts', 'seas', 'islands', 'capitals', 'waters', 'rivers', 'winds'],    rows: 6, slack: 0.24 },
+    { name: 'Warm Up',       cats: ['greek', 'rest', 'suits', 'temps', 'lifestage'],                                    rows: 3, slack: 0.22 },
+    { name: 'Kitchen',       cats: ['baked', 'drinks', 'cheese', 'berries', 'veg', 'soup'],                             rows: 3, moves: 45 },
+    { name: 'Out and About', cats: ['cities', 'continents', 'weather', 'boats', 'golf', 'clouds'],                      rows: 4, slack: 0.18 },
+    { name: 'Menagerie',     cats: ['catbreeds', 'bigcats', 'dogs', 'birdparts', 'bovines', 'pets', 'insects'],         rows: 4, slack: 0.18 },
+    { name: 'Garden',        cats: ['flowers', 'treeparts', 'herbs', 'greens', 'fungi', 'geology', 'seasons'],          rows: 4, slack: 0.16 },
+    { name: 'Pantry',        cats: ['coffee', 'tea', 'spices', 'bread', 'pasta', 'sauces', 'grains', 'citrus'],         rows: 5, slack: 0.15 },
+    { name: 'Night Sky',     cats: ['planets', 'space', 'physics', 'math', 'metals', 'gems', 'chemistry', 'weights'],   rows: 5, slack: 0.14 },
+    { name: 'Wardrobe',      cats: ['hats', 'shoes', 'fabrics', 'sewing', 'type', 'furniture', 'toolbox', 'skincare'],  rows: 5, slack: 0.13 },
+    { name: 'Far Places',    cats: ['peaks', 'deserts', 'seas', 'islands', 'capitals', 'waters', 'rivers', 'winds'],    rows: 6, slack: 0.12 },
     { name: 'Games Night',   cats: ['boardgames', 'cardgames', 'darts', 'track', 'martialart', 'musicgenre', 'dance',
-                                    'filmgenre', 'instrument'],                                                          rows: 6, slack: 0.22 },
+                                    'filmgenre', 'instrument'],                                                          rows: 6, slack: 0.12 },
     { name: 'Creatures',     cats: ['snakes', 'mammals', 'horses', 'gardenbird', 'catsounds', 'orchard', 'ocean',
-                                    'amphibians'],                                                          rows: 6, slack: 0.20 },
-    { name: 'Mixed Bag',     cats: ['robots', 'sticky', 'large', 'dessert', 'peppers', 'wine', 'fruit', 'beer'],        rows: 6, slack: 0.18 },
+                                    'amphibians'],                                                          rows: 6, slack: 0.11 },
+    { name: 'Mixed Bag',     cats: ['robots', 'sticky', 'large', 'dessert', 'peppers', 'wine', 'fruit', 'beer'],        rows: 6, slack: 0.10 },
 
     /* the vocabulary levels: a word and its synonyms, set by set */
-    { name: 'Plain Speech',  cats: ['truthful', 'praise', 'warlike', 'bringup', 'frolic', 'rude', 'cautious'],          rows: 4, slack: 0.34 },
-    { name: 'Second Nature', cats: ['mercy', 'merge', 'convincing', 'shortage', 'degrade', 'propriety', 'respect'],     rows: 4, slack: 0.32 },
-    { name: 'Sharp Tongue',  cats: ['harmful', 'object', 'mock', 'tyrant', 'rant', 'preachy', 'excusing'],              rows: 4, slack: 0.30 },
-    { name: 'Short Measure', cats: ['swindle', 'weariness', 'importance', 'plenty', 'full', 'flinch', 'brawl'],         rows: 5, slack: 0.28 },
-    { name: 'Good Company',  cats: ['loner', 'hopeful', 'dazzling', 'resist', 'joking', 'friendly', 'refined'],         rows: 5, slack: 0.26 },
-    { name: 'Rough Edges',   cats: ['slick', 'hindered', 'military', 'irritate', 'reject', 'grumpy', 'gaudy'],          rows: 5, slack: 0.24 },
-    { name: 'Upper Hand',    cats: ['uproar', 'suave', 'sizable', 'dread', 'dominance', 'struggle', 'cleverness'],      rows: 5, slack: 0.22 },
-    { name: 'Tight Spot',    cats: ['dilemma', 'sarcastic', 'impassive', 'fleeting', 'dislike', 'trite', 'cowardly'],   rows: 5, slack: 0.20 },
-    { name: 'Last Word',     cats: ['impartial', 'drawout', 'learned', 'fussy', 'sneaky', 'firebrand', 'regime'],       rows: 5, slack: 0.20 },
+    { name: 'Plain Speech',  cats: ['truthful', 'praise', 'warlike', 'bringup', 'frolic', 'rude', 'cautious'],          rows: 4, slack: 0.16 },
+    { name: 'Second Nature', cats: ['mercy', 'merge', 'convincing', 'shortage', 'degrade', 'propriety', 'respect'],     rows: 4, slack: 0.15 },
+    { name: 'Sharp Tongue',  cats: ['harmful', 'object', 'mock', 'tyrant', 'rant', 'preachy', 'excusing'],              rows: 4, slack: 0.14 },
+    { name: 'Short Measure', cats: ['swindle', 'weariness', 'importance', 'plenty', 'full', 'flinch', 'brawl'],         rows: 5, slack: 0.13 },
+    { name: 'Good Company',  cats: ['loner', 'hopeful', 'dazzling', 'resist', 'joking', 'friendly', 'refined'],         rows: 5, slack: 0.12 },
+    { name: 'Rough Edges',   cats: ['slick', 'hindered', 'military', 'irritate', 'reject', 'grumpy', 'gaudy'],          rows: 5, slack: 0.11 },
+    { name: 'Upper Hand',    cats: ['uproar', 'suave', 'sizable', 'dread', 'dominance', 'struggle', 'cleverness'],      rows: 5, slack: 0.10 },
+    { name: 'Tight Spot',    cats: ['dilemma', 'sarcastic', 'impassive', 'fleeting', 'dislike', 'trite', 'cowardly'],   rows: 5, slack: 0.09 },
+    { name: 'Last Word',     cats: ['impartial', 'drawout', 'learned', 'fussy', 'sneaky', 'firebrand', 'regime'],       rows: 5, slack: 0.08 },
 
     /* the trap levels, where every word could pass for a category beside it */
-    { name: 'Crossed Wires', cats: ['hardbirds', 'chess', 'poker', 'landform', 'fast', 'ships', 'tools', 'fishing'],    rows: 6, slack: 0.15 },
+    { name: 'Crossed Wires', cats: ['hardbirds', 'chess', 'poker', 'landform', 'fast', 'ships', 'tools', 'fishing'],    rows: 6, slack: 0.06 },
     { name: 'Double Lives',  cats: ['fish', 'colors', 'waterfowl', 'body', 'blooms', 'buildings', 'trees', 'nuts'],     rows: 6, slack: 0, minimal: true }
 ];
 
