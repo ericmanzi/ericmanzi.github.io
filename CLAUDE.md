@@ -88,6 +88,11 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   spare moves). A level marked `minimal` gets exactly the solution and not a
   move more — level 23 is set that way, and clears with zero to spare. The
   dealer reads only what a player can see, never the buried cards
+- A level can name its budget outright with `moves`, which beats both slack and
+  `minimal` — level 2 is pinned to 45 against a solution of 40 or 41. The
+  dealer throws away any deal it cannot solve inside the pin, so pinning never
+  deals a board that cannot be won; pin one below what the level needs and the
+  console says so and that deal falls back to its own solution
 - The dealer deals from whichever category has the most cards still waiting,
   avoiding the one it dealt last, and a deal whose deck runs more than `MAX_RUN`
   of a category back to back is thrown away and dealt again. Taking the first

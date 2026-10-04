@@ -469,6 +469,7 @@
     }
 
     function buildDeal(level, random) {
+        var tightest = null;   // the shortest solution seen, if the pin refuses them all
         for (var attempt = 0; attempt < 250; attempt++) {
             var cards = shuffle(buildCards(level), random);
             // A staircase, as the board is dealt: 4, 5, 6, 7 for rows = 4.
@@ -488,6 +489,29 @@
             // Deal again rather than hand over a deck that runs one category
             // together; late attempts take what they can get.
             if (attempt < 200 && longestRun(plan.stock) > MAX_RUN) continue;
+            // A level may pin its budget outright. Deal again rather than hand
+            // over a board the pin cannot pay for.
+            if (level.moves && plan.moves > level.moves) {
+                if (!tightest || plan.moves < tightest.plan.moves) {
+                    tightest = { plan: plan, tableau: tableau, attempt: attempt };
+                }
+                continue;
+            }
+            return finish(plan, tableau, attempt + 1);
+        }
+        // Every deal overshot the pin, so it is set below what the level can be
+        // solved in. Hand over the closest board at its own solution — losing
+        // on the deal is worse than a budget that does not match the data.
+        if (tightest) {
+            if (window.console && console.warn) {
+                console.warn('Word Solitaire: ' + level.name + ' is pinned to ' + level.moves +
+                    ' moves but needs at least ' + tightest.plan.moves);
+            }
+            return finish(tightest.plan, tightest.tableau, tightest.attempt + 1, true);
+        }
+        return null;
+
+        function finish(plan, tableau, attempts, overshot) {
             return {
                 tableau: tableau,
                 stock: plan.stock.map(function (card) {
@@ -498,14 +522,15 @@
                 // The dealer never has to turn the pile back, but a player who
                 // buries a card does, so the budget funds some of a pass. A big
                 // deck would otherwise hand out a fortune in spare moves.
-                moveLimit: level.minimal
-                    ? plan.moves        // exactly the solution: no room to wander
-                    : Math.round(plan.moves * (1 + level.slack)) +
-                        Math.min(plan.stock.length, RECYCLE_ALLOWANCE),
-                attempts: attempt + 1
+                moveLimit: level.moves && !overshot
+                    ? level.moves       // the level says what it allows
+                    : level.minimal || overshot
+                        ? plan.moves    // exactly the solution: no room to wander
+                        : Math.round(plan.moves * (1 + level.slack)) +
+                            Math.min(plan.stock.length, RECYCLE_ALLOWANCE),
+                attempts: attempts
             };
         }
-        return null;
     }
 
     /* ------------------------------------------------------------- game flow */

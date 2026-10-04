@@ -215,10 +215,14 @@ var CATEGORIES = {
    slack — spare moves on top of the solution the dealer worked out, as a
            fraction of it, before a capped pass through the deck is added
    minimal — ignore slack and allow exactly the solution the dealer found, so
-           the level takes a near-perfect line to clear */
+           the level takes a near-perfect line to clear
+   moves — a budget set by hand, which overrides slack and minimal both. The
+           dealer throws away any deal it cannot solve inside that number, so
+           a pin always leaves a line to the win; set one below what the level
+           needs and the console says so and the deal falls back to minimal */
 var LEVELS = [
     { name: 'Warm Up',       cats: ['greek', 'rest', 'suits', 'temps', 'lifestage'],                                    rows: 3, slack: 0.45 },
-    { name: 'Kitchen',       cats: ['baked', 'drinks', 'cheese', 'berries', 'veg', 'soup'],                             rows: 3, slack: 0.42 },
+    { name: 'Kitchen',       cats: ['baked', 'drinks', 'cheese', 'berries', 'veg', 'soup'],                             rows: 3, moves: 45 },
     { name: 'Out and About', cats: ['cities', 'continents', 'weather', 'boats', 'golf', 'clouds'],                      rows: 4, slack: 0.38 },
     { name: 'Menagerie',     cats: ['catbreeds', 'bigcats', 'dogs', 'birdparts', 'bovines', 'pets', 'insects'],         rows: 4, slack: 0.35 },
     { name: 'Garden',        cats: ['flowers', 'treeparts', 'herbs', 'greens', 'fungi', 'geology', 'seasons'],          rows: 4, slack: 0.32 },
