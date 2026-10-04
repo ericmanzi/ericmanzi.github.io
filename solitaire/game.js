@@ -14,7 +14,6 @@
     'use strict';
 
     var LIMITS = { hint: 3, undo: 5, wild: 1 };   // per level, refilled on a new deal
-    var RECYCLE_ALLOWANCE = 15; // spare moves for turning the pile back, at most
     var WASTE_PEEK = 3;         // how many of the unplaced pile stay in view
     var SLOTS = 4;              // foundation slots
     var COLUMNS = 4;            // tableau columns
@@ -519,15 +518,15 @@
                     return card;
                 }).reverse(),                          // drawn from the end
                 solution: plan.moves,
-                // The dealer never has to turn the pile back, but a player who
-                // buries a card does, so the budget funds some of a pass. A big
-                // deck would otherwise hand out a fortune in spare moves.
+                // Slack is the whole margin. A flat bonus for turning the pile
+                // back used to sit on top of it, which on a small deck was
+                // worth more than the slack itself — a level solvable in 30
+                // was handing out 50.
                 moveLimit: level.moves && !overshot
                     ? level.moves       // the level says what it allows
                     : level.minimal || overshot
                         ? plan.moves    // exactly the solution: no room to wander
-                        : Math.round(plan.moves * (1 + level.slack)) +
-                            Math.min(plan.stock.length, RECYCLE_ALLOWANCE),
+                        : Math.round(plan.moves * (1 + level.slack)),
                 attempts: attempts
             };
         }
