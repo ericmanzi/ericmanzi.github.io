@@ -51,7 +51,7 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   left, one card per tap with no limit; that space shows nothing until it does.
   Only the top card of the pile is in play, with the next two peeking out
   behind it. With the stock empty, tapping it turns the whole pile back into
-  the stock in the same order. A crowned category card (`Greek 0/3`) opens a
+  the stock in the same order. A crowned category card (`Praise 0/8`) opens a
   slot; that category's words then collect on it. Only crowned cards open
   slots, and nothing can be placed onto the unplaced pile
 - Tableau columns are working space: words of one category stack on each other
@@ -60,22 +60,72 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   goes on top until it is moved off. Dragging that crowned card lifts the whole
   capped stack (`topRun` keeps the words under it), and a capped stack is only
   droppable on an empty foundation slot, where the crowned card opens the
-  category and its words land on it in the same move. The dealer mirrors this,
-  so its plan and the board never diverge. Cards are dealt face down except the card
-  on top of each column, in a staircase (4, 5, 6, 7)
+  category and its words land on it in the same move. Cards are dealt face
+  down except the card on top of each column, in a staircase (rows, rows+1,
+  rows+2, rows+3)
 - Filling a category clears its slot. Every action costs a move; the level is
   lost when the counter reaches zero with cards still out
-- Decks grow with the level, from 24 cards on level 1 to 64 on the two trap
-  levels at the end. A 64-card level allows about 128 moves. Each level needs
-  more cards than its tableau takes (`4 * rows + 6`), or there is no stock at
-  all — keep a dozen or so spare, and set `rows` to suit the deck rather than
-  the level number
+- Ten levels, none of them locked — any level can be started from the menu.
+  Level 1 (`Far Places`) is geography anyone knows; levels 2-10 are GRE
+  vocabulary, each category a plain-English meaning on the crowned card
+  (`Praise`, `Stubborn`) and the GRE words that carry it. The original word
+  list the user supplied is all there, folded into bigger sets; only virago,
+  askance and disenfranchise were left out, for want of a clear synonym set.
+  The last two levels each pair categories a player will confuse on purpose:
+  `Short-lived` and `Concise` (brief in time, brief in words) on level 9,
+  `Impartial` and `Indifferent` (disinterested vs uninterested) on level 10
+- Sets run from four words to nine, about six on average, deliberately mixed
+  so a board holds long and short sets rather than six of everything. Keep the
+  crowned names plain — the hard part should be the words
+- No word appears in two categories and no category appears in two levels, so
+  nothing repeats as you play. `WordSolitaire.checkLevels()` enforces that,
+  along with a category never being named after a card in its own level — run
+  it after editing `levels.js`
+- Every level needs more cards than its tableau takes (`4 * rows + 6`), or
+  there is no stock at all. Depth ramps with difficulty: 4 rows on level 1, 5
+  through level 6, 6 after
+- The dealer shuffles fairly and then proves the shuffle can be won by playing
+  it (`buildDeal`). It used to do the reverse — build the deck by handing over
+  only a card the player could use right then — and that showed: the deck came
+  in waves of whichever four categories were open, ending with two of them
+  taking turns (`e f e f e f`). Do not go back to choosing the order
+- After the shuffle, `spreadDeck` breaks up what a fair shuffle throws up and
+  the eye reads as unshuffled: no two cards of a category side by side in a
+  column or in the stock (a fair shuffle does that about one pair in nine), and
+  no two categories taking turns four cards running (`c d c d`, in about a
+  quarter of fair decks). Each category then spreads over 60-70% of the stock
+- `playThrough` is the proof: a player who sees only what a person sees (column
+  tops, the whole pile, the slots, the deck count) and plays greedily — bank,
+  open the category with most in reach, keep the pile shallow, dig to turn
+  cards over, then deal, and recycle only if the last pass changed something.
+  Played plainly it is deterministic; `explore` adds randomness for extra
+  playouts. A shuffle no playout wins is thrown away. Its line is recorded in
+  the board's own move terms (`deal().line`), and a test must replay that line
+  through `move()`/`draw()` and win with exactly `moveLimit - solution` left —
+  that is what keeps the dealer's rules and the board's rules from drifting
+- The move budget is the best line found times `1 + slack`. Two knobs set
+  difficulty: `slack` (0.15 on level 1 down to 0.05 on level 9; level 10 is
+  `minimal`, exactly the line) and `tries`, how many playouts the dealer runs
+  before taking the shortest (1 on levels 1-3, so plain greedy play always
+  gets home with the slack in hand; 12 from level 7, so the obvious move every
+  time is not enough). Check a retune by playing the dealer's own policy
+  through the real engine (`nextStep()`) while deviating to a random legal move
+  a set share of the time — the user asked for hard, and at 10% deviation
+  levels 7-9 should still be won most of the time with a handful to spare
+- A level can name its budget outright with `moves`, which beats both slack and
+  `minimal`. The dealer throws away any deal it cannot win inside the pin, so
+  pinning never deals a board that cannot be won; pin one below what the level
+  needs and the console says so and that deal falls back to its own line
 - A refused move shakes the stack it was aimed at and flashes it red; a move
   that lands flashes the destination green. Both are a tint plus a ring that
   swells and fades on the card itself. The colour holds for the first quarter
-  of the half second before it drains, or the eye misses it (`flashZone`). The
-  toast is secondary: a small pill in a reserved strip above the tools
-  (`.toastrail`), about a second long, so keep its wording to a few words
+  of the half second before it drains, or the eye misses it (`flashZone`).
+  `onDragEnd` must redraw the board *before* making the move: redrawing after
+  it replaces the very element the move just flashed, which is how drag-and-
+  drop once showed no feedback at all while API-driven tests still passed —
+  test feedback with real pointer drags. The toast is secondary: a small pill
+  in a reserved strip above the tools (`.toastrail`), about a second long, so
+  keep its wording to a few words
 - The level shows as a number in the top-left corner (`LVL 7`), which leaves
   the height for the board and keeps the tool row clear of the bottom edge
 - While a card is being dragged, only the zone under the pointer is marked, and
@@ -84,42 +134,15 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
 - Cards move by drag and drop only (pointer events, so mouse and touch alike).
   A tap or click never moves a card; tapping the stock is the one exception, and
   it deals rather than moves
-- Deals are generated by playing the level through with a dealer that hands over
-  usable cards and keeps the order it dealt, so every deal is solvable and the
-  move limit is derived from that solution plus part of a pass through the deck
-  (`RECYCLE_ALLOWANCE`, capped so a big deck does not hand out a fortune in
-  spare moves). A level marked `minimal` gets exactly the solution and not a
-  move more — level 23 is set that way, and clears with zero to spare. The
-  dealer reads only what a player can see, never the buried cards
-- The dealer deals from whichever category has the most cards still waiting,
-  avoiding the one it dealt last, and a deal whose deck runs more than `MAX_RUN`
-  of a category back to back is thrown away and dealt again. Taking the first
-  usable card each time left a category stranded at the bottom of the deck,
-  dealt out in one run, which looked like an unshuffled deck
-- Twenty-three levels, none of them locked — any level can be started from the
-  menu. They come in three runs: everyday sets (levels 1-12) using words anyone
-  would recognise, vocabulary sets (13-21) where each category is a word and
-  its synonyms, and the two trap levels last (`Crossed Wires`, `Double Lives`),
-  whose categories are built so that every word could pass for a category also
-  on the table — Rook is a bird as well as a chess piece, Swift means fast,
-  Teal is a duck as well as a colour, Palm is a tree as well as a hand, Hook
-  and Reel and Net are tackle and tools alike, Hazel and Chestnut are trees as
-  well as colours. Adding
-  more like them means picking words whose second home is another category in
-  the level
-- Category sizes run from three words to seven, deliberately mixed, so a board
-  holds a spread of short and long sets rather than eight of everything; one
-  set on the last level runs to nine. Keep
-  everyday words everyday: obscure ones (a cocktail nobody orders, a shoe
-  nobody names) belong only in the vocabulary levels, where the point is that
-  the word is unfamiliar
-- No word appears in two categories and no category appears in two levels, so
-  nothing repeats as you play. `WordSolitaire.checkLevels()` enforces that,
-  along with a category never being named after a card in its own level — run
-  it after editing `levels.js`
+- Nothing in the game is selectable text. Safari only honours
+  `-webkit-user-select` and needs `-webkit-touch-callout: none` too, so both
+  sit on `body` beside the unprefixed rule; behind them, a `selectstart`
+  listener cancels any selection anywhere in the game
 - The board is written to `localStorage` after every change and restored on
   load, so a reload (a pull-to-refresh on a phone, say) resumes the same game
-  rather than dealing a new one; the save is cleared when the level ends
+  rather than dealing a new one; the save is cleared when the level ends. The
+  keys carry `.v2` because the level list was rebuilt, and a saved board whose
+  cards are not all in its level's categories is refused rather than resumed
 - The joker is a card, not a mode: taking one deals a `kind: 'joker'` card onto
   the unplaced pile. It can be dropped on any column whatever sits there (a
   crowned lid excepted), and once down, anything stacks on it. It never goes to
@@ -129,10 +152,12 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   again
 - No coins. Hint, undo and joker are capped per level (3 / 5 / 1, see `LIMITS`
   in `game.js`) and the allowance refills on a new deal; each button shows what
-  is left and greys out when spent. Only level progress is stored, in
-  `localStorage`
-- `window.WordSolitaire` exposes `state()`, `newGame()`, `move()`, `autoMove()`,
-  `draw()`, `legalMoves()` and `deal()` for console poking and automated checks
+  is left and greys out when spent. Undo rewinds the move counter too. Only
+  level progress is stored, in `localStorage`
+- `window.WordSolitaire` exposes `state()`, `newGame(level, deal?)`, `move()`,
+  `draw()`, `legalMoves()`, `deal()`, `nextStep()` and `checkLevels()` for
+  console poking and automated checks. `newGame` takes a prebuilt deal so a
+  test can build a board to order or replay a deal it has already seen
 
 ## Development Workflow
 
