@@ -17,8 +17,12 @@
     var WASTE_PEEK = 3;         // how many of the unplaced pile stay in view
     var SLOTS = 4;              // foundation slots
     var COLUMNS = 4;            // tableau columns
-    var KEY_PROGRESS = 'wordSolitaire.progress';
-    var KEY_GAME = 'wordSolitaire.game';
+    // The level list was rebuilt from scratch, so progress and saved boards
+    // from the old one mean nothing here: they live under new keys, and the
+    // old ones are cleared away below.
+    var KEY_PROGRESS = 'wordSolitaire.progress.v2';
+    var KEY_GAME = 'wordSolitaire.game.v2';
+    var OLD_KEYS = ['wordSolitaire.progress', 'wordSolitaire.game'];
 
     /* ---------------------------------------------------------------- store */
 
@@ -37,6 +41,9 @@
 
     var progress = readNumber(KEY_PROGRESS, 0);
     var state = null;
+    try {
+        OLD_KEYS.forEach(function (key) { window.localStorage.removeItem(key); });
+    } catch (err) { /* private mode */ }
 
     /* A phone reloads a page for all sorts of reasons — a pull on the scroll,
        a tab coming back from the background. The board is written down after
@@ -77,6 +84,14 @@
         var level = LEVELS[saved.levelIndex];
         if (!level || !saved.tableau || saved.tableau.length !== COLUMNS) return false;
         if (!saved.foundations || saved.foundations.length !== SLOTS) return false;
+        // every card must belong to this level, or the save is from other data
+        var cards = [].concat(saved.stock || [], saved.waste || []);
+        saved.tableau.forEach(function (column) { cards = cards.concat(column); });
+        saved.foundations.forEach(function (pile) { if (pile) cards.push(pile); });
+        var foreign = cards.some(function (card) {
+            return card && card.kind !== 'joker' && level.cats.indexOf(card.cat) < 0;
+        });
+        if (foreign) return false;
         state = {
             levelIndex: saved.levelIndex,
             level: level,
@@ -209,227 +224,17 @@
         return cards;
     }
 
-    /* Play the level through with a dealer that hands over a card the player
-       can actually use, and keep the order it dealt. The run only ever reads
-       what a player can see — the tops of the columns and the holding row —
-       so the order it produces is solvable without knowing the buried cards.
-       Returns the stock order and the length of that solution. */
+    /* The dealer shuffles fairly and then proves the shuffle can be won by
+       playing it. It used to build the deck the other way round, handing over
+       only a card the player could use at that moment, and that showed: the
+       deck came in waves of whichever four categories were open, ending in
+       two of them taking turns. A fair shuffle has no such tell, so now the
+       deck is shuffled, its neighbours broken up, and then played through by
+       a player who sees only what you see. A shuffle that player cannot win
+       is thrown away; the budget comes from the best line it found. */
+
     function cloneCard(card) {
         return { id: card.id, kind: card.kind, cat: card.cat, word: card.word, faceUp: !!card.faceUp };
-    }
-
-    function simulate(level, layout, pool, random) {
-        var tableau = layout.map(function (column) { return column.map(cloneCard); });
-        var waste = [];
-        var piles = [];
-        var open = {};
-        var finished = {};
-        var stock = [];
-        var left = pool.map(cloneCard);
-        var moves = 0;
-        var recent = [];       // the last few categories dealt, to spread them out
-        var i;
-
-        for (i = 0; i < SLOTS; i++) piles.push(null);
-
-        function freeSlot() { return piles.indexOf(null); }
-
-        function empty() {
-            return !left.length && !waste.length && tableau.every(function (c) { return !c.length; });
-        }
-
-        function collect(cards) {
-            var cat = cards[0].cat;
-            var slot = open[cat];
-            piles[slot].count += cards.length;
-            moves++;
-            if (piles[slot].count === catSize(cat)) {
-                piles[slot] = null;
-                delete open[cat];
-                finished[cat] = true;
-            }
-        }
-
-        function openCategory(card, carried) {
-            var slot = freeSlot();
-            piles[slot] = { cat: card.cat, count: carried ? carried.length : 0 };
-            open[card.cat] = slot;
-            moves++;
-            if (piles[slot].count === catSize(card.cat)) {
-                piles[slot] = null;
-                delete open[card.cat];
-                finished[card.cat] = true;
-            }
-        }
-
-        // How many cards of a category are waiting on the board — the dealer
-        // opens the category that unblocks the most.
-        function pressure(catId) {
-            var n = 0;
-            tableau.forEach(function (column) {
-                column.forEach(function (card) { if (card.cat === catId && card.kind === 'word') n++; });
-            });
-            waste.forEach(function (card) { if (card.cat === catId && card.kind === 'word') n++; });
-            return n;
-        }
-
-        for (var guard = 0; guard < 6000; guard++) {
-            if (empty()) return { stock: stock, moves: moves };
-
-            var acted = false;
-            var t;
-            var card;
-
-            // 1. Feed an open foundation from the tableau first: it uncovers cards.
-            //    A whole group travels at once, exactly as it does on the board.
-            for (t = 0; t < tableau.length && !acted; t++) {
-                var column = tableau[t];
-                var run = topRunOf(column);
-                if (!run.length || crownIn(run)) continue;
-                if (run[0].kind !== 'word' || !open.hasOwnProperty(run[0].cat)) continue;
-                column.splice(column.length - run.length, run.length);
-                flipTop(column);
-                collect(run);
-                acted = true;
-            }
-            if (acted) continue;
-
-            // 2. Then the top of the unplaced pile, the only card of it in play.
-            var lid = waste.length ? waste[waste.length - 1] : null;
-            if (lid && lid.kind === 'word' && open.hasOwnProperty(lid.cat)) {
-                collect(waste.splice(waste.length - 1, 1));
-                continue;
-            }
-
-            // 3. Open a category with a card that is already in reach.
-            if (freeSlot() >= 0) {
-                for (t = 0; t < tableau.length && !acted; t++) {
-                    var col = tableau[t];
-                    if (!col.length) continue;
-                    var capped = topRunOf(col);
-                    var crown = crownIn(capped);
-                    if (!crown || finished[crown.cat] || open.hasOwnProperty(crown.cat)) continue;
-                    col.splice(col.length - capped.length, capped.length);
-                    flipTop(col);
-                    openCategory(crown, capped.slice(0, -1));
-                    acted = true;
-                }
-                if (!acted && lid && lid.kind === 'cat' && !finished[lid.cat] &&
-                        !open.hasOwnProperty(lid.cat)) {
-                    waste.pop();
-                    openCategory(lid);
-                    acted = true;
-                }
-                if (acted) continue;
-            }
-
-            // 4. Deal. Every candidate is a card the player can use straight
-            //    away, and the dealer picks among them at random, preferring a
-            //    category other than the one it dealt last. Taking the first
-            //    usable card every time dealt a category out in one run, which
-            //    looked — and played — like an unshuffled deck.
-            if (left.length) {
-                var usable = [];       // goes straight to an open slot
-                var openers = [];      // a crowned card, with a slot free for it
-                var stackable = [];    // can at least sit on a column
-                var freeOne = freeSlot() >= 0;
-                for (i = 0; i < left.length; i++) {
-                    var candidate = left[i];
-                    if (candidate.kind === 'word' && open.hasOwnProperty(candidate.cat)) {
-                        usable.push(i);
-                    } else if (candidate.kind === 'cat' && freeOne && !finished[candidate.cat] &&
-                            !open.hasOwnProperty(candidate.cat)) {
-                        openers.push(i);
-                    } else if (candidate.kind === 'word') {
-                        for (t = 0; t < tableau.length; t++) {
-                            var lip = tableau[t].length ? tableau[t][tableau[t].length - 1] : null;
-                            if (!lip || (lip.faceUp && lip.kind === 'word' && lip.cat === candidate.cat)) {
-                                stackable.push(i);
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                var choices = usable.concat(openers, stackable);
-                if (!choices.length) choices = left.map(function (ignored, n) { return n; });
-
-                // Deal from whichever category still has the most cards waiting,
-                // so they all run down together. Taking whatever was usable left
-                // one category stranded at the bottom of the deck, dealt out in
-                // a single run.
-                var remaining = {};
-                left.forEach(function (candidate) {
-                    remaining[candidate.cat] = (remaining[candidate.cat] || 0) + 1;
-                });
-                var fresh = choices.filter(function (n) { return left[n].cat !== recent[recent.length - 1]; });
-                var pool2 = fresh.length ? fresh : choices;
-                var best = -1;
-                var pick = pool2[0];
-                pool2.forEach(function (n) {
-                    var weight = remaining[left[n].cat] + random();   // ties fall either way
-                    if (weight > best) {
-                        best = weight;
-                        pick = n;
-                    }
-                });
-
-                card = left.splice(pick, 1)[0];
-                recent.push(card.cat);
-                if (recent.length > 3) recent.shift();
-                card.faceUp = true;
-                stock.push(card);
-                waste.push(card);
-                moves++;
-                continue;
-            }
-
-            // 5. Unload the pile's top card onto a column of the same category.
-            if (lid && lid.kind === 'word') {
-                for (t = 0; t < tableau.length && !acted; t++) {
-                    var head = tableau[t].length ? tableau[t][tableau[t].length - 1] : null;
-                    if (!head || !head.faceUp || head.kind !== 'word' || head.cat !== lid.cat) continue;
-                    tableau[t].push(waste.pop());
-                    moves++;
-                    acted = true;
-                }
-            }
-            if (acted) continue;
-
-            // 6. Dig: move a run onto a matching column to uncover what is under it.
-            for (t = 0; t < tableau.length && !acted; t++) {
-                var dig = topRunOf(tableau[t]);
-                if (!dig.length || dig.length === tableau[t].length || crownIn(dig)) continue;
-                if (dig[0].kind !== 'word') continue;
-                for (var d = 0; d < tableau.length && !acted; d++) {
-                    if (d === t) continue;
-                    var onto = tableau[d];
-                    if (!onto.length) continue;
-                    var cap = onto[onto.length - 1];
-                    if (!cap.faceUp || cap.kind !== 'word' || cap.cat !== dig[0].cat) continue;
-                    tableau[t].splice(tableau[t].length - dig.length, dig.length);
-                    flipTop(tableau[t]);
-                    tableau[d] = onto.concat(dig);
-                    moves++;
-                    acted = true;
-                }
-            }
-            if (acted) continue;
-
-            // 7. Last resort: an empty column will take anything.
-            if (lid) {
-                for (t = 0; t < tableau.length && !acted; t++) {
-                    if (tableau[t].length) continue;
-                    tableau[t].push(waste.pop());
-                    moves++;
-                    acted = true;
-                }
-            }
-            if (acted) continue;
-
-            return null;   // wedged — the caller deals again
-        }
-        return null;
     }
 
     // topRun without the module-level state, for the dealer's own board.
@@ -447,85 +252,344 @@
         return run;
     }
 
-    // How many of one category the deck deals back to back at its worst.
-    function longestRun(cards) {
-        var worst = 0;
-        var run = 0;
-        var previous = null;
-        cards.forEach(function (card) {
-            run = card.cat === previous ? run + 1 : 1;
-            previous = card.cat;
-            if (run > worst) worst = run;
-        });
-        return worst;
-    }
-
-    var MAX_RUN = 4;   // a longer run reads as an unshuffled deck
-
     function crownIn(run) {
         var last = run[run.length - 1];
         return last && last.kind === 'cat' ? last : null;
     }
 
-    function buildDeal(level, random) {
-        var tightest = null;   // the shortest solution seen, if the pin refuses them all
-        for (var attempt = 0; attempt < 250; attempt++) {
-            var cards = shuffle(buildCards(level), random);
-            // A staircase, as the board is dealt: 4, 5, 6, 7 for rows = 4.
-            var depths = [level.rows, level.rows + 1, level.rows + 2, level.rows + 3];
-            var tableau = [];
-            var i;
-            for (i = 0; i < COLUMNS; i++) {
-                tableau.push([]);
-                for (var n = 0; n < depths[i]; n++) {
-                    var card = cards.pop();
-                    card.faceUp = n === depths[i] - 1;   // only the card on top shows
-                    tableau[i].push(card);
+    /* Columns and stock as stretches of the shuffled deck, in the order they
+       are read: four staircase columns, then the stock. */
+    function deckSegments(level, total) {
+        var bounds = [];
+        var start = 0;
+        for (var c = 0; c < COLUMNS; c++) {
+            bounds.push([start, start + level.rows + c]);
+            start += level.rows + c;
+        }
+        bounds.push([start, total]);
+        return bounds;
+    }
+
+    /* Break up the patterns a fair shuffle throws up and the eye reads as an
+       unshuffled deck. Within each column and within the stock, no card sits
+       next to one of its own category (a fair shuffle does that about one
+       pair in nine), and no two categories take turns four cards running
+       (c d c d). A card that breaks either rule swaps with a random card
+       elsewhere that breaks nothing in either spot. */
+    function spreadDeck(cards, bounds, random) {
+        var seg = [];
+        bounds.forEach(function (range, s) {
+            for (var i = range[0]; i < range[1]; i++) seg[i] = s;
+        });
+        function same(a, b) {
+            return a >= 0 && b < cards.length && seg[a] === seg[b] && cards[a].cat === cards[b].cat;
+        }
+        // whether any pair or ping-pong touches position i
+        function badAt(i) {
+            if (same(i - 1, i) || same(i, i + 1)) return true;
+            for (var w = i - 3; w <= i; w++) {
+                if (w < 0 || w + 3 >= cards.length || seg[w] !== seg[w + 3]) continue;
+                if (same(w, w + 2) && same(w + 1, w + 3)) return true;
+            }
+            return false;
+        }
+        for (var pass = 0; pass < 8; pass++) {
+            var clean = true;
+            for (var i = 0; i < cards.length; i++) {
+                if (!badAt(i)) continue;
+                clean = false;
+                for (var tries = 0; tries < 40; tries++) {
+                    var j = Math.floor(random() * cards.length);
+                    if (j === i || cards[j].cat === cards[i].cat) continue;
+                    var a = cards[i];
+                    cards[i] = cards[j];
+                    cards[j] = a;
+                    if (!badAt(i) && !badAt(j)) break;
+                    cards[j] = cards[i];        // that made a new pattern: put it back
+                    cards[i] = a;
                 }
             }
-            var plan = simulate(level, tableau, cards, random);
-            if (!plan) continue;
-            // Deal again rather than hand over a deck that runs one category
-            // together; late attempts take what they can get.
-            if (attempt < 200 && longestRun(plan.stock) > MAX_RUN) continue;
+            if (clean) break;
+        }
+        return cards;
+    }
+
+    /* A player who sees what you see — the column tops, the pile (all of it,
+       having dealt it), the slots and how many cards the deck holds — and
+       plays a plain greedy game: bank what can be banked, open the category
+       with most in reach, keep the pile shallow, dig to turn cards over, and
+       only then deal. Played plainly it is deterministic, so the same board
+       always gets the same line; `explore` adds a little randomness so
+       repeated playouts try different lines. Returns the length of the line and its steps, in
+       the same terms as the board's own moves, or null if it wedges. It can
+       start from any board, so `firstOnly` asks for just the move it would
+       make next. Jokers are the player's, not the dealer's: it ignores them. */
+    function playThrough(board, random, explore, firstOnly) {
+        var tableau = board.tableau.map(function (column) { return column.map(cloneCard); });
+        var stock = board.stock.map(cloneCard);
+        var waste = board.waste.map(cloneCard);
+        var piles = board.foundations.map(function (pile) {
+            return pile ? { cat: pile.cat, count: pile.cards.length } : null;
+        });
+        var finished = {};
+        var line = [];
+        var progress = 0;
+        var progressAtRecycle = -1;
+        var t;
+
+        board.completed.forEach(function (cat) { finished[cat] = true; });
+        if ([tableau, [stock], [waste]].some(function (lists) {
+            return lists.some(function (list) { return list.some(isJoker); });
+        })) return null;
+
+        function slotOf(cat) {
+            for (var s = 0; s < SLOTS; s++) if (piles[s] && piles[s].cat === cat) return s;
+            return -1;
+        }
+        function freeSlot() { return piles.indexOf(null); }
+        function flip(column) {
+            if (column.length && !column[column.length - 1].faceUp) {
+                column[column.length - 1].faceUp = true;
+                progress++;
+            }
+        }
+        function bank(cat, n) {
+            var s = slotOf(cat);
+            piles[s].count += n;
+            progress += n;
+            if (piles[s].count === catSize(cat)) {
+                piles[s] = null;
+                finished[cat] = true;
+            }
+        }
+        function step(fromZone, fromIndex, toZone, toIndex) {
+            line.push({ from: { zone: fromZone, index: fromIndex }, to: { zone: toZone, index: toIndex } });
+        }
+        function cleared() {
+            return !stock.length && !waste.length && tableau.every(function (column) { return !column.length; });
+        }
+        // How much of a category is in reach: words on column tops count
+        // double, any face-up word and anything in the pile once.
+        function pressure(cat) {
+            var n = 0;
+            tableau.forEach(function (column) {
+                topRunOf(column).forEach(function (card) { if (card.cat === cat && card.kind === 'word') n += 2; });
+                column.forEach(function (card) { if (card.faceUp && card.cat === cat && card.kind === 'word') n++; });
+            });
+            waste.forEach(function (card) { if (card.cat === cat && card.kind === 'word') n++; });
+            return n + (explore ? random() * 3 : 0);
+        }
+
+        for (var guard = 0; guard < 4000; guard++) {
+            if (firstOnly && line.length) return { moves: 1, line: line };
+            if (cleared()) return { moves: line.length, line: line };
+            var acted = false;
+            var lid = waste.length ? waste[waste.length - 1] : null;
+
+            // 1. A column's run onto its open slot: it uncovers a card.
+            var runs = [];
+            for (t = 0; t < COLUMNS; t++) {
+                var run = topRunOf(tableau[t]);
+                if (run.length && !crownIn(run) && run[0].kind === 'word' && slotOf(run[0].cat) >= 0) runs.push(t);
+            }
+            if (runs.length) {
+                t = explore ? runs[Math.floor(random() * runs.length)] : runs[0];
+                var going = topRunOf(tableau[t]);
+                var into = slotOf(going[0].cat);
+                tableau[t].splice(tableau[t].length - going.length, going.length);
+                flip(tableau[t]);
+                step('tableau', t, 'foundation', into);
+                bank(going[0].cat, going.length);
+                continue;
+            }
+
+            // 2. The pile's top onto its open slot.
+            if (lid && lid.kind === 'word' && slotOf(lid.cat) >= 0) {
+                step('waste', 0, 'foundation', slotOf(lid.cat));
+                waste.pop();
+                bank(lid.cat, 1);
+                continue;
+            }
+
+            // 3. Open a category: a capped stack, a crowned card on a column, or
+            //    one on top of the pile — whichever has the most in reach.
+            if (freeSlot() >= 0) {
+                var best = null;
+                var bestScore = -1;
+                for (t = 0; t < COLUMNS; t++) {
+                    var capped = topRunOf(tableau[t]);
+                    var crown = crownIn(capped);
+                    if (!crown || finished[crown.cat] || slotOf(crown.cat) >= 0) continue;
+                    var score = pressure(crown.cat) + (capped.length - 1) * 3 + 1;
+                    if (score > bestScore) { bestScore = score; best = { t: t, crown: crown, carried: capped.length - 1 }; }
+                }
+                if (lid && lid.kind === 'cat' && !finished[lid.cat] && slotOf(lid.cat) < 0) {
+                    var fromPile = pressure(lid.cat) + 0.5;
+                    if (fromPile > bestScore) best = { t: -1, crown: lid, carried: 0 };
+                }
+                if (best) {
+                    var slot = freeSlot();
+                    if (best.t >= 0) {
+                        tableau[best.t].splice(tableau[best.t].length - (best.carried + 1), best.carried + 1);
+                        flip(tableau[best.t]);
+                        step('tableau', best.t, 'foundation', slot);
+                    } else {
+                        waste.pop();
+                        step('waste', 0, 'foundation', slot);
+                    }
+                    piles[slot] = { cat: best.crown.cat, count: 0 };
+                    progress++;
+                    if (best.carried) bank(best.crown.cat, best.carried);
+                    continue;
+                }
+            }
+
+            // 4. The pile's top onto a column of its own words, which keeps the
+            //    pile shallow. A crowned card goes this way only to park on its
+            //    own words while every slot is taken.
+            if (lid && !(explore && random() < 0.15)) {
+                for (t = 0; t < COLUMNS && !acted; t++) {
+                    var head = tableau[t].length ? tableau[t][tableau[t].length - 1] : null;
+                    if (!head || !head.faceUp || head.kind !== 'word' || head.cat !== lid.cat) continue;
+                    if (lid.kind === 'cat' && freeSlot() >= 0) continue;
+                    tableau[t].push(waste.pop());
+                    step('waste', 0, 'tableau', t);
+                    acted = true;
+                }
+                if (acted) continue;
+            }
+
+            // 5. Dig: move a run that sits on a face-down card, onto a column of
+            //    its own words or into an empty column, to turn that card over.
+            if (!(explore && random() < 0.15)) {
+                for (t = 0; t < COLUMNS && !acted; t++) {
+                    var dig = topRunOf(tableau[t]);
+                    if (!dig.length || dig.length === tableau[t].length) continue;
+                    if (crownIn(dig) && dig.length > 1) continue;          // a capped stack only goes home
+                    if (tableau[t][tableau[t].length - dig.length - 1].faceUp) continue;
+                    for (var d = 0; d < COLUMNS && !acted; d++) {
+                        if (d === t) continue;
+                        var onto = tableau[d];
+                        var top = onto.length ? onto[onto.length - 1] : null;
+                        var fits = !top ||
+                            (top.faceUp && top.kind === 'word' && top.cat === dig[0].cat);
+                        if (!fits) continue;
+                        tableau[t].splice(tableau[t].length - dig.length, dig.length);
+                        flip(tableau[t]);
+                        tableau[d] = onto.concat(dig);
+                        step('tableau', t, 'tableau', d);
+                        acted = true;
+                    }
+                }
+                if (acted) continue;
+            }
+
+            // 6. Deal.
+            if (stock.length) {
+                var dealt = stock.pop();
+                dealt.faceUp = true;
+                waste.push(dealt);
+                line.push({ draw: true });
+                continue;
+            }
+
+            // 7. With the deck out, a dead card on the pile can wait in an
+            //    empty column rather than go round again.
+            if (lid && waste.length > 1) {
+                for (t = 0; t < COLUMNS && !acted; t++) {
+                    if (tableau[t].length) continue;
+                    tableau[t].push(waste.pop());
+                    step('waste', 0, 'tableau', t);
+                    acted = true;
+                }
+                if (acted) continue;
+            }
+
+            // 8. Turn the pile back — unless the last whole pass changed nothing.
+            if (waste.length) {
+                if (progress === progressAtRecycle) return null;
+                progressAtRecycle = progress;
+                stock = waste.reverse();
+                stock.forEach(function (card) { card.faceUp = false; });
+                waste = [];
+                line.push({ draw: true });                 // a tap on the empty deck
+                continue;
+            }
+            return null;
+        }
+        return null;
+    }
+
+    /* How hard the dealer looks for a short line before it sets the budget.
+       One try is plain greedy play, so straightforward play always gets home
+       with the slack in hand; each extra try is a playout with some
+       exploration, and the budget comes from the shortest. A level that
+       searches harder finds shorter lines, so its budget leaves less room
+       for a player who just plays the obvious move. */
+    var PLAYOUTS = 12;
+
+    function buildDeal(level, random) {
+        var tightest = null;   // the shortest line seen, if the pin refuses them all
+        for (var attempt = 0; attempt < 400; attempt++) {
+            var cards = shuffle(buildCards(level), random);
+            spreadDeck(cards, deckSegments(level, cards.length), random);
+            // A staircase, as the board is dealt: 4, 5, 6, 7 for rows = 4.
+            var tableau = [];
+            var k = 0;
+            for (var c = 0; c < COLUMNS; c++) {
+                var column = [];
+                var depth = level.rows + c;
+                for (var n = 0; n < depth; n++) {
+                    var card = cards[k++];
+                    card.faceUp = n === depth - 1;          // only the card on top shows
+                    column.push(card);
+                }
+                tableau.push(column);
+            }
+            // cards[k] is drawn first, so the stock is the rest, reversed
+            var stock = cards.slice(k).reverse();
+            stock.forEach(function (card) { card.faceUp = false; });
+
+            var board = { tableau: tableau, stock: stock, waste: [], foundations: [null, null, null, null], completed: [] };
+            var best = null;
+            var tries = level.tries || PLAYOUTS;
+            for (var p = 0; p < tries; p++) {
+                var tried = playThrough(board, random, p > 0);
+                if (tried && (!best || tried.moves < best.moves)) best = tried;
+            }
+            if (!best) continue;
             // A level may pin its budget outright. Deal again rather than hand
             // over a board the pin cannot pay for.
-            if (level.moves && plan.moves > level.moves) {
-                if (!tightest || plan.moves < tightest.plan.moves) {
-                    tightest = { plan: plan, tableau: tableau, attempt: attempt };
+            if (level.moves && best.moves > level.moves) {
+                if (!tightest || best.moves < tightest.plan.moves) {
+                    tightest = { plan: best, tableau: tableau, stock: stock, attempt: attempt };
                 }
                 continue;
             }
-            return finish(plan, tableau, attempt + 1);
+            return finish(best, tableau, stock, attempt + 1);
         }
         // Every deal overshot the pin, so it is set below what the level can be
-        // solved in. Hand over the closest board at its own solution — losing
-        // on the deal is worse than a budget that does not match the data.
+        // won in. Hand over the closest board at its own line — losing on the
+        // deal is worse than a budget that does not match the data.
         if (tightest) {
             if (window.console && console.warn) {
                 console.warn('Word Solitaire: ' + level.name + ' is pinned to ' + level.moves +
                     ' moves but needs at least ' + tightest.plan.moves);
             }
-            return finish(tightest.plan, tightest.tableau, tightest.attempt + 1, true);
+            return finish(tightest.plan, tightest.tableau, tightest.stock, tightest.attempt + 1, true);
         }
         return null;
 
-        function finish(plan, tableau, attempts, overshot) {
+        function finish(plan, tableau, stock, attempts, overshot) {
             return {
                 tableau: tableau,
-                stock: plan.stock.map(function (card) {
-                    card.faceUp = false;
-                    return card;
-                }).reverse(),                          // drawn from the end
+                stock: stock,
                 solution: plan.moves,
-                // Slack is the whole margin. A flat bonus for turning the pile
-                // back used to sit on top of it, which on a small deck was
-                // worth more than the slack itself — a level solvable in 30
-                // was handing out 50.
+                line: plan.line,
                 moveLimit: level.moves && !overshot
                     ? level.moves       // the level says what it allows
                     : level.minimal || overshot
-                        ? plan.moves    // exactly the solution: no room to wander
+                        ? plan.moves    // exactly the line: no room to wander
                         : Math.round(plan.moves * (1 + level.slack)),
                 attempts: attempts
             };
@@ -534,9 +598,9 @@
 
     /* ------------------------------------------------------------- game flow */
 
-    function newGame(levelIndex) {
+    function newGame(levelIndex, prebuilt) {
         var level = LEVELS[levelIndex];
-        var deal = null;
+        var deal = prebuilt || null;   // a test can hand in a deal it has already seen
         while (!deal) deal = buildDeal(level, mulberry32((Math.random() * 4294967296) >>> 0));
         var foundations = [];
         for (var i = 0; i < SLOTS; i++) foundations.push(null);
@@ -1147,11 +1211,11 @@
             '<ul class="help">' +
             '<li><b>Everything moves by dragging.</b> Drag a card, or a group of ' +
             'them, from where it is to where it belongs.</li>' +
-            '<li><b>Open a category.</b> A card like <i>Greek 0/3</i> is a category ' +
+            '<li><b>Open a category.</b> A card like <i>Praise 0/8</i> is a category ' +
             'card: drag it into one of the four slots and that category starts ' +
             'collecting. Only four run at once.</li>' +
-            '<li><b>Send words home.</b> Drag a word onto its slot. Kappa goes ' +
-            'to Greek, Toronto goes to Cities — nothing else is accepted.</li>' +
+            '<li><b>Send words home.</b> Drag a word onto its slot. Extol goes ' +
+            'to Praise, Nile goes to Rivers — nothing else is accepted.</li>' +
             '<li><b>Use the columns.</b> Drag a word onto another word of the same ' +
             'category to keep it handy; the whole group then moves in one go. Any ' +
             'card can go on an empty column.</li>' +
@@ -1218,6 +1282,9 @@
             return;
         }
 
+        var selection = window.getSelection ? window.getSelection() : null;
+        if (selection && selection.rangeCount) selection.removeAllRanges();
+
         var cards = pickable(zone, index);
         if (!cards.length) {
             if (zone === 'tableau' && state.tableau[index].length) toast('That card is face down');
@@ -1281,18 +1348,26 @@
         current.ghost.parentNode.removeChild(current.ghost);
         clearTargets();
 
-        if (!current.moved) {       // a tap is not a move: put the card back
-            render();
-            return;
-        }
+        // Put the lifted cards back before anything else happens. This must
+        // come first: drawing the board again after the move would replace
+        // the very cards the move just flashed green or shook red, and the
+        // player would see no feedback at all.
+        render();
+        if (!current.moved) return;   // a tap is not a move
         var over = zoneAt(event.clientX, event.clientY);
         if (over && !(over.zone === current.from.zone && over.index === current.from.index)) {
             moveCards(current.from, { zone: over.zone, index: over.index });
         }
-        render();
     }
 
     document.addEventListener('pointerdown', onDragStart);
+
+    // A second guard behind the CSS one: no selection starts anywhere in the
+    // game, and a long press never opens the context menu over the board.
+    document.addEventListener('selectstart', function (event) { event.preventDefault(); });
+    document.addEventListener('contextmenu', function (event) {
+        if (event.target.closest && event.target.closest('[data-zone], .drag-ghost')) event.preventDefault();
+    });
 
     document.getElementById('tool-hint').addEventListener('click', useHint);
     document.getElementById('tool-undo').addEventListener('click', useUndo);
@@ -1334,6 +1409,12 @@
         checkLevels: checkLevels,
         deal: function (levelIndex) {
             return buildDeal(LEVELS[levelIndex], mulberry32((Math.random() * 4294967296) >>> 0));
+        },
+        // the move the dealer's own player would make next, without making it
+        nextStep: function () {
+            if (!state || state.over) return null;
+            var next = playThrough(state, Math.random, false, true);
+            return next && next.line.length ? next.line[0] : null;
         }
     };
 

@@ -53,7 +53,13 @@
             min-height: 100vh;
             padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
             -webkit-tap-highlight-color: transparent;
+            /* Nothing in the game is text to copy, and a drag that strays
+               off a card should never select a word. Safari only honours
+               the prefixed form, and needs the callout off as well, or a
+               long press on a card brings up the copy menu. */
+            -webkit-user-select: none;
             user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .app {
