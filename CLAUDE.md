@@ -13,6 +13,9 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
 - `chat/index.html` - AI chat interface using Groq API
 - `bananagrams/index.html` - Single-player Bananagrams word game built with React
 - `solitaire/` - Word Solitaire: a landing page (`index.html`) and the game itself (`game.html`)
+- `nanagrams/` - Support page (`index.html`) and privacy policy (`privacy.html`) for
+  the Nanagrams iOS app (repo `ericmanzi/Bananagrams`); App Store Connect links to both,
+  so keep the URLs stable and the privacy policy true to what the app and `backend/` do
 - `email.html` - Simple contact information page
 - `assets/` - Static assets (CSS, content like resume PDF)
 
