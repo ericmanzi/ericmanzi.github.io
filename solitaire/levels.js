@@ -131,6 +131,8 @@ var CATEGORIES = {
            shorter lines and leave a plain player less room
    minimal — ignore slack and allow exactly the line the dealer found, so the
            level takes a near-perfect game to clear
+   extra — a flat number of moves added on top of the budget, whichever way
+           it was worked out (but not on top of a `moves` pin)
    moves — a budget set by hand, which overrides slack and minimal both. The
            dealer throws away any deal it cannot win inside that number, so a
            pin always leaves a line to the win; set one below what the level
@@ -147,7 +149,7 @@ var LEVELS = [
     { name: 'Upper Hand',    cats: ['uproar', 'suave', 'sizable', 'dread', 'dominance', 'struggle', 'cleverness', 'obscure'],    rows: 6, slack: 0.07 },
     { name: 'Tight Spot',    cats: ['dilemma', 'sarcastic', 'impassive', 'fleeting', 'concise', 'wordy', 'dislike', 'trite'],    rows: 6, slack: 0.05 },
     { name: 'Last Word',     cats: ['impartial', 'indifferent', 'drawout', 'learned', 'fussy', 'sneaky', 'circle', 'fanatic',
-                                    'cowardly'],                                                                                 rows: 6, slack: 0, minimal: true }
+                                    'cowardly'],                                                                                 rows: 6, slack: 0, minimal: true, extra: 5 }
 ];
 
 /* Run WordSolitaire.checkLevels() in the console to check the data holds. */

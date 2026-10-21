@@ -589,8 +589,8 @@
                 moveLimit: level.moves && !overshot
                     ? level.moves       // the level says what it allows
                     : level.minimal || overshot
-                        ? plan.moves    // exactly the line: no room to wander
-                        : Math.round(plan.moves * (1 + level.slack)),
+                        ? plan.moves + (overshot ? 0 : level.extra || 0)   // the line, plus any flat allowance
+                        : Math.round(plan.moves * (1 + level.slack)) + (level.extra || 0),
                 attempts: attempts
             };
         }

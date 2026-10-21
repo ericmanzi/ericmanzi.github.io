@@ -105,7 +105,7 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   that is what keeps the dealer's rules and the board's rules from drifting
 - The move budget is the best line found times `1 + slack`. Two knobs set
   difficulty: `slack` (0.15 on level 1 down to 0.05 on level 9; level 10 is
-  `minimal`, exactly the line) and `tries`, how many playouts the dealer runs
+  `minimal`, the line plus a flat `extra: 5`) and `tries`, how many playouts the dealer runs
   before taking the shortest (1 on levels 1-3, so plain greedy play always
   gets home with the slack in hand; 12 from level 7, so the obvious move every
   time is not enough). Check a retune by playing the dealer's own policy
