@@ -160,17 +160,18 @@
 
     /* A column takes a card of the same category, and a crowned card may cap a
        stack of its own words. Once it does, the stack is closed: a crowned card
-       is a lid, and nothing sits on a lid. */
+       is a lid, and only a joker sits on a lid. A capped stack travels whole,
+       to an empty slot, an empty column or a joker — never onto a word. */
     function canPlaceOnColumn(cards, index) {
         var column = state.tableau[index];
-        // A capped stack has one destination: the slot its crowned card opens.
-        if (crownOf(cards) && cards.length > 1) return false;
-        if (!column.length) return true;
+        var capped = crownOf(cards) && cards.length > 1;
+        if (!column.length) return true;               // an empty column takes anything
         var top = column[column.length - 1];
         if (!top.faceUp) return false;
-        if (top.kind === 'cat') return false;          // a crowned card is a lid
         if (top.kind === 'joker') return true;         // a joker takes anything
-        if (cards[0].kind === 'joker') return true;    // and lands anywhere
+        if (cards[0].kind === 'joker') return true;    // and lands anywhere, a lid included
+        if (top.kind === 'cat') return false;          // a crowned card is a lid
+        if (capped) return false;                      // a capped stack never sits on a word
         return top.kind === 'word' && top.cat === cards[0].cat;
     }
 
@@ -461,18 +462,19 @@
 
             // 5. Dig: move a run that sits on a face-down card, onto a column of
             //    its own words or into an empty column, to turn that card over.
+            //    A capped stack can only take the empty column.
             if (!(explore && random() < 0.15)) {
                 for (t = 0; t < COLUMNS && !acted; t++) {
                     var dig = topRunOf(tableau[t]);
                     if (!dig.length || dig.length === tableau[t].length) continue;
-                    if (crownIn(dig) && dig.length > 1) continue;          // a capped stack only goes home
+                    var cappedDig = crownIn(dig) && dig.length > 1;
                     if (tableau[t][tableau[t].length - dig.length - 1].faceUp) continue;
                     for (var d = 0; d < COLUMNS && !acted; d++) {
                         if (d === t) continue;
                         var onto = tableau[d];
                         var top = onto.length ? onto[onto.length - 1] : null;
-                        var fits = !top ||
-                            (top.faceUp && top.kind === 'word' && top.cat === dig[0].cat);
+                        var fits = !top || (!cappedDig &&
+                            top.faceUp && top.kind === 'word' && top.cat === dig[0].cat);
                         if (!fits) continue;
                         tableau[t].splice(tableau[t].length - dig.length, dig.length);
                         flip(tableau[t]);
@@ -707,9 +709,6 @@
 
     function rejection(cards, to) {
         if (to.zone === 'waste') return 'Only the deck fills that pile';
-        if (to.zone === 'tableau' && crownOf(cards) && cards.length > 1) {
-            return 'A capped stack only goes to a slot';
-        }
         if (to.zone === 'foundation') {
             if (cards[0].kind === 'joker') return 'A joker has no slot';
             var pile = state.foundations[to.index];
@@ -722,6 +721,7 @@
             if (top && top.faceUp && top.kind === 'cat') {
                 return 'Closed by its crowned card';
             }
+            if (crownOf(cards) && cards.length > 1) return 'Empty column or joker only';
         }
         return 'Same category only';
     }
@@ -1220,16 +1220,16 @@
             'category to keep it handy; the whole group then moves in one go. Any ' +
             'card can go on an empty column.</li>' +
             '<li><b>A crowned card closes a stack.</b> Drop one on a stack of its ' +
-            'own words and it caps them, marked with a gold lid. Nothing can be ' +
-            'added on top after that. Drag the crowned card again and the whole ' +
-            'capped stack comes with it — straight to a slot, which is the only ' +
-            'place it will go, opening the category and banking every word it ' +
-            'carries in one move.</li>' +
+            'own words and it caps them, marked with a gold lid. Only a joker can ' +
+            'go on top after that. Drag the crowned card again and the whole ' +
+            'capped stack comes with it — to an empty slot, where it opens the ' +
+            'category and banks every word it carries in one move, or to an ' +
+            'empty column or a joker to wait. It never goes onto a word.</li>' +
             '<li><b>The joker is a card.</b> Take one and it is dealt onto the ' +
-            'unplaced pile. Drag it onto any column, whatever is sitting there, ' +
-            'and anything can then be stacked on it — which is how you start a ' +
-            'stack with nowhere else to put it. It is good for that one stack: ' +
-            'lift what you piled on and the joker goes with it.</li>' +
+            'unplaced pile. Drag it onto any column, whatever is sitting there — ' +
+            'a gold lid included — and anything can then be stacked on it, a ' +
+            'capped stack too. It is good for that one stack: lift what you piled ' +
+            'on and the joker goes with it.</li>' +
             '<li><b>Deal when stuck.</b> Tap the deck as often as you like. Each ' +
             'card lands on the unplaced pile beside it, and only the card on top ' +
             'of that pile is in play — the ones behind it are waiting.</li>' +
