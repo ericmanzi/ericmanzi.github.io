@@ -56,11 +56,13 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   slots, and nothing can be placed onto the unplaced pile
 - Tableau columns are working space: words of one category stack on each other
   and move as a group. A crowned card may be dropped on a stack of its own
-  words, which caps it — a crowned card is a lid, so nothing (not even a joker)
-  goes on top until it is moved off. Dragging that crowned card lifts the whole
-  capped stack (`topRun` keeps the words under it), and a capped stack is only
-  droppable on an empty foundation slot, where the crowned card opens the
-  category and its words land on it in the same move. Cards are dealt face
+  words, which caps it — a crowned card is a lid, and only a joker goes on top
+  until it is moved off. Dragging that crowned card lifts the whole capped
+  stack (`topRun` keeps the words under it). A capped stack goes to an empty
+  foundation slot, where the crowned card opens the category and its words
+  land on it in the same move, or to an empty column or onto a joker to wait;
+  it never goes onto a word. The dealer's player uses the empty column too,
+  to dig a capped stack off a face-down card. Cards are dealt face
   down except the card on top of each column, in a staircase (rows, rows+1,
   rows+2, rows+3)
 - Filling a category clears its slot. Every action costs a move; the level is
@@ -105,7 +107,7 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   that is what keeps the dealer's rules and the board's rules from drifting
 - The move budget is the best line found times `1 + slack`. Two knobs set
   difficulty: `slack` (0.15 on level 1 down to 0.05 on level 9; level 10 is
-  `minimal`, exactly the line) and `tries`, how many playouts the dealer runs
+  `minimal`, the line plus a flat `extra: 5`) and `tries`, how many playouts the dealer runs
   before taking the shortest (1 on levels 1-3, so plain greedy play always
   gets home with the slack in hand; 12 from level 7, so the obvious move every
   time is not enough). Check a retune by playing the dealer's own policy
@@ -144,8 +146,9 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   keys carry `.v2` because the level list was rebuilt, and a saved board whose
   cards are not all in its level's categories is refused rather than resumed
 - The joker is a card, not a mode: taking one deals a `kind: 'joker'` card onto
-  the unplaced pile. It can be dropped on any column whatever sits there (a
-  crowned lid excepted), and once down, anything stacks on it. It never goes to
+  the unplaced pile. It can be dropped on any column whatever sits there, a
+  crowned lid included, and once down, anything stacks on it — a capped stack
+  too. It never goes to
   a foundation, is not counted among the cards left to clear, and is swept off
   when the level is won. It is good for one stack: anything placed on a joker
   marks it `used`, and `burnSpentJokers()` removes it as soon as it is uncovered
