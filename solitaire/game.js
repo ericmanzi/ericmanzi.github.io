@@ -1144,7 +1144,71 @@
         overlayEl.classList.remove('show');
     }
 
+    /* ------------------------------------------------------------- the prize
+       Beating the last level turns up a message nobody is told about. Its
+       button lays out three date options; picking one opens an email to the
+       address on the site's contact page with the choice already written. */
+    var PRIZE_EMAIL = 'eric.manzi.site@gmail.com';
+    var PRIZE_DATES = [
+        {
+            when: 'Friday, December 11',
+            title: 'Lights and a classic diner',
+            plan: 'A walk through ZooLights at Lincoln Park Zoo after dark, then dinner at ' +
+                'The Chicago Diner on Halsted — all vegetarian since 1983, and famous for ' +
+                'its vegan milkshakes.'
+        },
+        {
+            when: 'Saturday, December 12',
+            title: 'A downtown holiday night',
+            plan: 'Glühwein at the Christkindlmarket in Daley Plaza, a lap of the Maggie ' +
+                'Daley Park skating ribbon at dusk, then the vegetarian tasting menu at ' +
+                'Indienne in River North.'
+        },
+        {
+            when: 'Sunday, December 13',
+            title: 'Brunch and art',
+            plan: 'Brunch at Lula Cafe in Logan Square, then an afternoon at the Art ' +
+                'Institute — the Thorne Miniature Rooms are worth the detour.'
+        }
+    ];
+
+    function showPrize() {
+        openOverlay(
+            '<h2>Table cleared</h2>' +
+            '<p class="prize">Congrats you have qualified for a date with eric manzi!</p>' +
+            '<button class="btn primary" data-action="claim">Click here to claim your prize!</button>' +
+            '<button class="btn" data-action="replay">Play again</button>' +
+            '<button class="btn ghost" data-action="menu">Menu</button>'
+        );
+    }
+
+    function showDates() {
+        var options = PRIZE_DATES.map(function (date) {
+            var subject = 'Claiming my prize: ' + date.title + ' (' + date.when + ')';
+            var body = 'I beat the last level of Word Solitaire, and I pick the ' + date.when +
+                ' date: ' + date.title + '.\n\n' + date.plan;
+            var href = 'mailto:' + PRIZE_EMAIL + '?subject=' + encodeURIComponent(subject) +
+                '&body=' + encodeURIComponent(body);
+            return '<div class="date-option">' +
+                '<div class="when">' + date.when + '</div>' +
+                '<h3>' + date.title + '</h3>' +
+                '<p>' + date.plan + '</p>' +
+                '<a class="btn primary" href="' + href + '">Pick this date</a>' +
+                '</div>';
+        }).join('');
+        openOverlay(
+            '<h2>Your prize</h2>' +
+            '<p>Three dates in Chicago, the weekend of December 11–13, 2026. Pick one.</p>' +
+            options +
+            '<button class="btn ghost" data-action="menu">Menu</button>'
+        );
+    }
+
     function showWin() {
+        if (state.levelIndex === LEVELS.length - 1) {
+            showPrize();
+            return;
+        }
         openOverlay(
             '<h2>Table cleared</h2>' +
             '<p>Every category home with ' + state.moves + ' move' + (state.moves === 1 ? '' : 's') + ' to spare.</p>' +
@@ -1389,6 +1453,7 @@
         if (action === 'next') newGame(Math.min(state.levelIndex + 1, LEVELS.length - 1));
         if (action === 'goto') newGame(parseInt(trigger.getAttribute('data-level'), 10));
         if (action === 'undo') useUndo();
+        if (action === 'claim') showDates();
         if (action === 'wild') { closeOverlay(); takeJoker(); }
     });
 
