@@ -162,8 +162,8 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   and a "Click here to claim your prize!" button, which lays out three date
   options in Chicago for the weekend of December 11-13, 2026 (`PRIZE_DATES`
   in `game.js`, all vegetarian-friendly). Each option's "Pick this date" is a
-  `mailto:` to `PRIZE_EMAIL` (manzieric420@gmail.com — deliberately not the
-  contact-page address) with the choice in the subject and body; there is no
+  `mailto:` to `PRIZE_EMAIL` (eric.manzi.site@gmail.com, the same address as
+  the contact page) with the choice in the subject and body; there is no
   backend to send it anywhere else. Nothing
   else on the site mentions it, but it is plain text in `game.js`, so anyone
   reading the source can find it

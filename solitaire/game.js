@@ -1148,7 +1148,7 @@
        Beating the last level turns up a message nobody is told about. Its
        button lays out three date options; picking one opens an email to
        PRIZE_EMAIL with the choice already written. */
-    var PRIZE_EMAIL = 'manzieric420@gmail.com';
+    var PRIZE_EMAIL = 'eric.manzi.site@gmail.com';
     var PRIZE_DATES = [
         {
             when: 'Friday, December 11',
