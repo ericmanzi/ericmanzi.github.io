@@ -157,6 +157,16 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   in `game.js`) and the allowance refills on a new deal; each button shows what
   is left and greys out when spent. Undo rewinds the move counter too. Only
   level progress is stored, in `localStorage`
+- Beating level 10 shows a hidden prize instead of the usual win panel
+  (`showPrize`): "Congrats you have qualified for a date with eric manzi!"
+  and a "Click here to claim your prize!" button, which lays out three date
+  options in Chicago for the weekend of December 11-13, 2026 (`PRIZE_DATES`
+  in `game.js`, all vegetarian-friendly). Each option's "Pick this date" is a
+  `mailto:` to `PRIZE_EMAIL` (eric.manzi.site@gmail.com, the same address as
+  the contact page) with the choice in the subject and body; there is no
+  backend to send it anywhere else. Nothing
+  else on the site mentions it, but it is plain text in `game.js`, so anyone
+  reading the source can find it
 - `window.WordSolitaire` exposes `state()`, `newGame(level, deal?)`, `move()`,
   `draw()`, `legalMoves()`, `deal()`, `nextStep()` and `checkLevels()` for
   console poking and automated checks. `newGame` takes a prebuilt deal so a
