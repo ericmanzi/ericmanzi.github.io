@@ -953,6 +953,13 @@
     var overlayEl = document.getElementById('overlay');
     var panelEl = document.getElementById('panel');
 
+    // Long words get smaller type so they stay on one line of the card;
+    // fourteen letters (Circumlocution) is the longest the game deals.
+    function wordSize(word) {
+        if (word.length > 12) return ' long xlong';
+        return word.length > 7 ? ' long' : '';
+    }
+
     function cardFace(card, options) {
         options = options || {};
         var classes = 'card' + (card.kind === 'cat' ? ' catcard' : '') + (options.classes || '');
@@ -966,7 +973,7 @@
             inner += '<span class="crown">&#9819;</span>' +
                 '<span class="count">0/' + catSize(card.cat) + '</span>';
         }
-        inner += '<span class="word' + (card.word.length > 7 ? ' long' : '') + '">' + card.word + '</span>';
+        inner += '<span class="word' + wordSize(card.word) + '">' + card.word + '</span>';
         return '<div class="' + classes + '"' + style + '>' + inner + '</div>';
     }
 
@@ -1041,7 +1048,7 @@
                 '<div class="card' + (pile.cards.length ? '' : ' catcard') + '">' +
                 (pile.cards.length ? '' : '<span class="crown">&#9819;</span>') +
                 '<span class="count">' + pile.cards.length + '/' + catSize(pile.cat) + '</span>' +
-                '<span class="word' + (top && top.word.length > 7 ? ' long' : '') + '">' +
+                '<span class="word' + (top ? wordSize(top.word) : '') + '">' +
                 (top ? top.word : category.name) + '</span></div>';
             html += '<div class="fslot filled" data-zone="foundation" data-index="' + index + '">' + body + '</div>';
         });
@@ -1145,9 +1152,10 @@
     }
 
     /* ------------------------------------------------------------- the prize
-       Beating the last level turns up a message nobody is told about. Its
+       Beating level 10 turns up a message nobody is told about. Its
        button lays out three date options; picking one opens an email to
        PRIZE_EMAIL with the choice already written. */
+    var PRIZE_LEVEL = 9;   // level 10, wherever it sits in the list
     var PRIZE_EMAIL = 'eric.manzi.site@gmail.com';
     var PRIZE_DATES = [
         {
@@ -1177,6 +1185,9 @@
             '<h2>Table cleared</h2>' +
             '<p class="prize">Congrats you have qualified for a date with eric manzi!</p>' +
             '<button class="btn primary" data-action="claim">Click here to claim your prize!</button>' +
+            (state.levelIndex + 1 < LEVELS.length
+                ? '<button class="btn" data-action="next">Next level</button>'
+                : '') +
             '<button class="btn" data-action="replay">Play again</button>' +
             '<button class="btn ghost" data-action="menu">Menu</button>'
         );
@@ -1185,7 +1196,7 @@
     function showDates() {
         var options = PRIZE_DATES.map(function (date) {
             var subject = 'Claiming my prize: ' + date.title + ' (' + date.when + ')';
-            var body = 'I beat the last level of Word Solitaire, and I pick the ' + date.when +
+            var body = 'I beat level 10 of Word Solitaire, and I pick the ' + date.when +
                 ' date: ' + date.title + '.\n\n' + date.plan;
             var href = 'mailto:' + PRIZE_EMAIL + '?subject=' + encodeURIComponent(subject) +
                 '&body=' + encodeURIComponent(body);
@@ -1205,7 +1216,7 @@
     }
 
     function showWin() {
-        if (state.levelIndex === LEVELS.length - 1) {
+        if (state.levelIndex === PRIZE_LEVEL) {
             showPrize();
             return;
         }
