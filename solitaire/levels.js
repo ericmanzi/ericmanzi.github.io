@@ -119,7 +119,71 @@ var CATEGORIES = {
     sneaky:     { name: 'Sneaky',      color: '#7a63d8', words: ['Furtive', 'Surreptitious', 'Clandestine', 'Covert', 'Stealthy', 'Sly', 'Underhanded'] },
     circle:     { name: 'Inner Circle', color: '#5a5a7a', words: ['Junta', 'Cabal', 'Coterie', 'Faction', 'Clique', 'Camarilla'] },
     fanatic:    { name: 'Fanatic',     color: '#c2532a', words: ['Zealot', 'Bigot', 'Chauvinist', 'Jingoist', 'Partisan', 'Sectarian'] },
-    cowardly:   { name: 'Cowardly',    color: '#8c3a6a', words: ['Craven', 'Pusillanimous', 'Timorous', 'Spineless', 'Recreant', 'Fainthearted'] }
+    cowardly:   { name: 'Cowardly',    color: '#8c3a6a', words: ['Craven', 'Pusillanimous', 'Timorous', 'Spineless', 'Recreant', 'Fainthearted'] },
+
+    /* ---- levels 11-16 ----
+       Built from a second word list. Where its words share a meaning they
+       make a synonym set, as before; where they share only a subject they
+       make a themed one (Water, Military, Faith). A word in a set that is not
+       on the list is there to fill it out. The 27 list words already in the
+       game stay where they were; eugenic is left out. */
+    // level 11
+    outofline:  { name: 'Out of Line',  color: '#7a63d8', words: ['Bumptious', 'Contumacious', 'Obstreperous', 'Unseemly', 'Raucous', 'Fractious'] },
+    work:       { name: 'Work',         color: '#c2536b', words: ['Drudgery', 'Travail', 'Tedium', 'Desultory', 'Slog'] },
+    worthless:  { name: 'Worthless',    color: '#3a8a7a', words: ['Dross', 'Bootless', 'Futile', 'Chaff', 'Dregs'] },
+    growth:     { name: 'Growth',       color: '#b8742a', words: ['Efflorescent', 'Fructify', 'Fecundity', 'Gestate', 'Accretion', 'Burgeon'] },
+    highslows:  { name: 'Highs & Lows', color: '#4b68c9', words: ['Acme', 'Culmination', 'Nadir', 'Apex', 'Zenith'] },
+    style:      { name: 'Style',        color: '#8c3a6a', words: ['Disheveled', 'Askew', 'Ungainly', 'Rococo', 'Modish', 'Affected', 'Sumptuous'] },
+    lessen:     { name: 'Lessen',       color: '#4a8f4a', words: ['Curtail', 'Abate', 'Skimp', 'Diminish', 'Dwindle'] },
+
+    // level 12
+    innerlife:  { name: 'Inner Life',   color: '#a8562a', words: ['Ken', 'Volition', 'Pathos', 'Credence', 'Conscience', 'Intuition'] },
+    writing:    { name: 'Writing',      color: '#5a6fd8', words: ['Epilogue', 'Compendium', 'Gazette', 'Effusion', 'Cognomen', 'Emend', 'Adumbration'] },
+    timing:     { name: 'Timing',       color: '#8a5fbf', words: ['Abeyance', 'Biennial', 'Diurnal', 'Concomitant', 'Hiatus'] },
+    food:       { name: 'Food & Drink', color: '#2f7f9e', words: ['Victuals', 'Masticate', 'Imbibe', 'Offal', 'Piquant', 'Acetic', 'Acidulous', 'Abstemious'] },
+    ghostly:    { name: 'Ghostly',      color: '#6f7f8c', words: ['Wraith', 'Uncanny', 'Ethereal', 'Tenebrous', 'Spectral', 'Eerie'] },
+    sorts:      { name: 'Out of Sorts', color: '#7a63d8', words: ['Dispirited', 'Abash', 'Umbrage', 'Bristle', 'Crotchety', 'Testy', 'Taciturn'] },
+    urge:       { name: 'Urge',         color: '#c2536b', words: ['Actuate', 'Importune', 'Inculcate', 'Hortatory', 'Exhort', 'Spur'] },
+
+    // level 13
+    grant:      { name: 'Give & Agree', color: '#3a8a7a', words: ['Vouchsafe', 'Deign', 'Endue', 'Accede', 'Fain', 'Bestow'] },
+    landsky:    { name: 'Land & Sky',   color: '#b8742a', words: ['Acclivity', 'Hummock', 'Slough', 'Aerie', 'Welkin'] },
+    healing:    { name: 'Healing',      color: '#4b68c9', words: ['Emollient', 'Analgesia', 'Palliate', 'Salubrious', 'Salutary', 'Astringent'] },
+    fanciful:   { name: 'Fanciful',     color: '#8c3a6a', words: ['Quixotic', 'Chimerical', 'Vagary', 'Whimsical', 'Utopian'] },
+    trickery:   { name: 'Trickery',     color: '#4a8f4a', words: ['Artifice', 'Duplicity', 'Blandish', 'Foist', 'Chicanery', 'Subterfuge'] },
+    disaster:   { name: 'Disaster',     color: '#a8562a', words: ['Debacle', 'Dire', 'Baleful', 'Wreak', 'Jeopardy', 'Calamity'] },
+    rogues:     { name: 'Rogues',       color: '#5a6fd8', words: ['Malefactor', 'Dastard', 'Curmudgeon', 'Dolt', 'Laggard', 'Malingerer'] },
+    admirable:  { name: 'Admirable',    color: '#8a5fbf', words: ['Probity', 'Sagacious', 'Eminent', 'Laudatory', 'Illustrious'] },
+
+    // level 14
+    harsh:      { name: 'Harsh Words',  color: '#2f7f9e', words: ['Billingsgate', 'Calumniate', 'Opprobrious', 'Chide', 'Captious', 'Carping', 'Deprecatory'] },
+    people:     { name: 'People',       color: '#6f7f8c', words: ['Neophyte', 'Dilettante', 'Pariah', 'Denizen', 'Kith', 'Numismatist'] },
+    onthemove:  { name: 'On the Move',  color: '#7a63d8', words: ['Lope', 'Canter', 'Errant', 'Digress', 'Circuitous', 'Conveyance'] },
+    weather:    { name: 'Weather',      color: '#c2536b', words: ['Swelter', 'Dank', 'Muggy', 'Sultry', 'Clammy'] },
+    money:      { name: 'Money',        color: '#3a8a7a', words: ['Usury', 'Peculation', 'Hypothecate', 'Munificent', 'Fritter', 'Mulct', 'Beholden'] },
+    trinkets:   { name: 'Trinkets',     color: '#b8742a', words: ['Bauble', 'Amulet', 'Gewgaw', 'Talisman', 'Curio'] },
+    captivate:  { name: 'Captivate',    color: '#4b68c9', words: ['Engross', 'Enthrall', 'Beguile', 'Mesmerize', 'Rivet'] },
+    senses:     { name: 'Senses',       color: '#8c3a6a', words: ['Descry', 'Odorous', 'Mellifluous', 'Olfactory', 'Tactile'] },
+
+    // level 15
+    nerve:      { name: 'Nerve',        color: '#4a8f4a', words: ['Aplomb', 'Sangfroid', 'Equanimity', 'Equable', 'Mettle', 'Doughty'] },
+    language:   { name: 'Language',     color: '#a8562a', words: ['Aver', 'Avouch', 'Controvert', 'Advert', 'Analogy', 'Circumlocution', 'Exegesis', 'Denotation', 'Demotic'] },
+    wicked:     { name: 'Wicked',       color: '#5a6fd8', words: ['Iniquitous', 'Dissolute', 'Impious', 'Bestial', 'Impenitent', 'Turpitude', 'Reprobate'] },
+    bodily:     { name: 'Body',         color: '#8a5fbf', words: ['Corporeal', 'Somatic', 'Adipose', 'Hirsute', 'Corpulent', 'Ruddy', 'Lissome', 'Dexterous'] },
+    water:      { name: 'Water',        color: '#2f7f9e', words: ['Brackish', 'Turbid', 'Tepid', 'Quay', 'Ewer', 'Shoal', 'Gaff'] },
+    light:      { name: 'Light',        color: '#6f7f8c', words: ['Lucent', 'Fulgent', 'Luster', 'Burnish', 'Gloaming', 'Lambent'] },
+    extent:     { name: 'Extent',       color: '#7a63d8', words: ['Exiguous', 'Arrant', 'Catholic', 'Illimitable', 'Boundless'] },
+    letgo:      { name: 'Let Go',       color: '#c2536b', words: ['Abjure', 'Jettison', 'Excision', 'Cull', 'Disabuse', 'Emancipate'] },
+
+    // level 16
+    faith:      { name: 'Faith',        color: '#3a8a7a', words: ['Benison', 'Genuflect', 'Desecrate', 'Expiate', 'Avatar', 'Asceticism', 'Troth', 'Augury'] },
+    military:   { name: 'Military',     color: '#b8742a', words: ['Citadel', 'Bivouac', 'Barrage', 'Beleaguer', 'Holster', 'Panoply', 'Accoutre', 'Pommel', 'Cache'] },
+    shallow:    { name: 'Shallow',      color: '#4b68c9', words: ['Puerile', 'Sophomoric', 'Jejune', 'Vacuous', 'Vapid', 'Inane'] },
+    law:        { name: 'Law',          color: '#8c3a6a', words: ['Arraign', 'Amnesty', 'Durance', 'Imputation', 'Fiat', 'Indict'] },
+    deathage:   { name: 'Death & Age',  color: '#4a8f4a', words: ['Epitaph', 'Necrology', 'Crone', 'Dotage', 'Decrepit', 'Lugubrious'] },
+    spin:       { name: 'Spin',         color: '#a8562a', words: ['Centrifugal', 'Centripetal', 'Whorl', 'Welter', 'Vortex'] },
+    spirits:    { name: 'High Spirits', color: '#5a6fd8', words: ['Ebullient', 'Vivacious', 'Frolicsome', 'Revelry', 'Geniality', 'Ardor', 'Witticism', 'Burlesque'] },
+    stick:      { name: 'Stick & Bind', color: '#8a5fbf', words: ['Congeal', 'Cohere', 'Glutinous', 'Batten', 'Swathe', 'Adhere'] }
 };
 
 /* rows  — cards dealt into the shortest tableau column; the four columns run
@@ -149,7 +213,21 @@ var LEVELS = [
     { name: 'Upper Hand',    cats: ['uproar', 'suave', 'sizable', 'dread', 'dominance', 'struggle', 'cleverness', 'obscure'],    rows: 6, slack: 0.07 },
     { name: 'Tight Spot',    cats: ['dilemma', 'sarcastic', 'impassive', 'fleeting', 'concise', 'wordy', 'dislike', 'trite'],    rows: 6, slack: 0.05 },
     { name: 'Last Word',     cats: ['impartial', 'indifferent', 'drawout', 'learned', 'fussy', 'sneaky', 'circle', 'fanatic',
-                                    'cowardly'],                                                                                 rows: 6, slack: 0, minimal: true, extra: 5 }
+                                    'cowardly'],                                                                                 rows: 6, slack: 0, minimal: true, extra: 5 },
+
+    /* from the second word list, smallest deck first */
+    { name: 'Fine Print',   cats: ['outofline', 'work', 'worthless', 'growth', 'highslows', 'style', 'lessen'],
+                                    rows: 6, slack: 0.07 },
+    { name: 'Deep Water',   cats: ['innerlife', 'writing', 'timing', 'food', 'ghostly', 'sorts', 'urge'],
+                                    rows: 6, slack: 0.07 },
+    { name: 'Hard Words',   cats: ['grant', 'landsky', 'healing', 'fanciful', 'trickery', 'disaster', 'rogues', 'admirable'],
+                                    rows: 6, slack: 0.06 },
+    { name: 'Old Guard',    cats: ['harsh', 'people', 'onthemove', 'weather', 'money', 'trinkets', 'captivate', 'senses'],
+                                    rows: 6, slack: 0.06 },
+    { name: 'Fair Game',    cats: ['nerve', 'language', 'wicked', 'bodily', 'water', 'light', 'extent', 'letgo'],
+                                    rows: 6, slack: 0.05 },
+    { name: 'Endgame',      cats: ['faith', 'military', 'shallow', 'law', 'deathage', 'spin', 'spirits', 'stick'],
+                                    rows: 6, slack: 0.05 }
 ];
 
 /* Run WordSolitaire.checkLevels() in the console to check the data holds. */
