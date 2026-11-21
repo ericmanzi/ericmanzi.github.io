@@ -67,15 +67,24 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   rows+2, rows+3)
 - Filling a category clears its slot. Every action costs a move; the level is
   lost when the counter reaches zero with cards still out
-- Ten levels, none of them locked — any level can be started from the menu.
-  Level 1 (`Far Places`) is geography anyone knows; levels 2-10 are GRE
+- Sixteen levels, none of them locked — any level can be started from the
+  menu. Level 1 (`Far Places`) is geography anyone knows; levels 2-10 are GRE
   vocabulary, each category a plain-English meaning on the crowned card
   (`Praise`, `Stubborn`) and the GRE words that carry it. The original word
   list the user supplied is all there, folded into bigger sets; only virago,
   askance and disenfranchise were left out, for want of a clear synonym set.
-  The last two levels each pair categories a player will confuse on purpose:
+  Levels 9 and 10 each pair categories a player will confuse on purpose:
   `Short-lived` and `Concise` (brief in time, brief in words) on level 9,
   `Impartial` and `Indifferent` (disinterested vs uninterested) on level 10
+- Levels 11-16 come from a second GRE word list. Where its words share a
+  meaning they make a synonym set as before (`Wicked`, `Nerve`); where they
+  share only a subject they make a themed set (`Water`: brackish, turbid,
+  tepid, quay, ewer, shoal, gaff; `Military`, `Faith`, `Body`), since many of
+  the words have no synonyms on the list. Padding words fill out sets whose
+  list words are few. List words already in the game stayed in their old
+  sets; eugenic was left out. When putting themed sets on one level, check no
+  word could pass for another set there — `Crone` beside `People`, `Skimp`
+  beside `Money`, `Raucous` beside `Harsh Words` were all moved apart
 - Sets run from four words to nine, about six on average, deliberately mixed
   so a board holds long and short sets rather than six of everything. Keep the
   crowned names plain — the hard part should be the words
@@ -107,7 +116,8 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   that is what keeps the dealer's rules and the board's rules from drifting
 - The move budget is the best line found times `1 + slack`. Two knobs set
   difficulty: `slack` (0.15 on level 1 down to 0.05 on level 9; level 10 is
-  `minimal`, the line plus a flat `extra: 5`) and `tries`, how many playouts the dealer runs
+  `minimal`, the line plus a flat `extra: 5`; levels 11-16 run 0.07 down to
+  0.05) and `tries`, how many playouts the dealer runs
   before taking the shortest (1 on levels 1-3, so plain greedy play always
   gets home with the slack in hand; 12 from level 7, so the obvious move every
   time is not enough). Check a retune by playing the dealer's own policy
@@ -128,6 +138,11 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   test feedback with real pointer drags. The toast is secondary: a small pill
   in a reserved strip above the tools (`.toastrail`), about a second long, so
   keep its wording to a few words
+- Card words come in three sizes (`wordSize`): normal, `long` past seven
+  letters, `xlong` past twelve. Every word must sit on one line of a card
+  from 320px wide up — `Circumlocution`, fourteen letters, is the longest the
+  game deals, and it spilled at 390px until `xlong` was added. Check any new
+  long word on a phone-width screenshot
 - The level shows as a number in the top-left corner (`LVL 7`), which leaves
   the height for the board and keeps the tool row clear of the bottom edge
 - While a card is being dragged, only the zone under the pointer is marked, and
@@ -157,8 +172,9 @@ This is a personal portfolio website (ericmanzi.github.io) hosted on GitHub Page
   in `game.js`) and the allowance refills on a new deal; each button shows what
   is left and greys out when spent. Undo rewinds the move counter too. Only
   level progress is stored, in `localStorage`
-- Beating level 10 shows a hidden prize instead of the usual win panel
-  (`showPrize`): "Congrats you have qualified for a date with eric manzi!"
+- Beating level 10 (`PRIZE_LEVEL`, fixed by index — it is no longer the last
+  level) shows a hidden prize instead of the usual win panel (`showPrize`),
+  with a Next level button since levels follow it: "Congrats you have qualified for a date with eric manzi!"
   and a "Click here to claim your prize!" button, which lays out three date
   options in Chicago for the weekend of December 11-13, 2026 (`PRIZE_DATES`
   in `game.js`, all vegetarian-friendly). Each option's "Pick this date" is a
